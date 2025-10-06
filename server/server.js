@@ -16,6 +16,9 @@ app.get('/', (req, res) => {
 
 // Routes
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/groups', require('./routes/groups'));
+app.use('/api/expenses', require('./routes/expenses')); // ADD THIS
+app.use('/api/balances', require('./routes/balances')); // ADD THIS
 
 const PORT = process.env.PORT || 5000;
 
@@ -24,7 +27,10 @@ const startServer = async () => {
     await connectDB();
     app.listen(PORT, () => {
       console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log('✅ Auth routes available at /api/auth');
+      console.log('✅ Auth routes: /api/auth');
+      console.log('✅ Group routes: /api/groups');
+      console.log('✅ Expense routes: /api/expenses');
+      console.log('✅ Balance routes: /api/balances');
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
