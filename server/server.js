@@ -17,8 +17,9 @@ app.get('/', (req, res) => {
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/groups', require('./routes/groups'));
-app.use('/api/expenses', require('./routes/expenses')); // ADD THIS
-app.use('/api/balances', require('./routes/balances')); // ADD THIS
+app.use('/api/expenses', require('./routes/expenses'));
+app.use('/api/balances', require('./routes/balances'));
+app.use('/api/settlements', require('./routes/settlements')); // ADD THIS
 
 const PORT = process.env.PORT || 5000;
 
@@ -31,6 +32,7 @@ const startServer = async () => {
       console.log('✅ Group routes: /api/groups');
       console.log('✅ Expense routes: /api/expenses');
       console.log('✅ Balance routes: /api/balances');
+      console.log('✅ Settlement routes: /api/settlements'); // ADD THIS
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
