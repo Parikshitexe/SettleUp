@@ -35,7 +35,17 @@ const [expenseForm, setExpenseForm] = useState({
     fetchGroup();
     fetchExpenses();
     fetchBalances();
+    fetchSettlements();
   }, [id]);
+
+  const [settlements, setSettlements] = useState([]);
+const [showRecordSettlement, setShowRecordSettlement] = useState(false);
+const [settlementForm, setSettlementForm] = useState({
+  paidBy: '',
+  paidTo: '',
+  amount: '',
+  note: ''
+});
 
   const fetchGroup = async () => {
     try {
@@ -66,6 +76,15 @@ const [expenseForm, setExpenseForm] = useState({
       setBalances(res.data);
     } catch (error) {
       console.error('Fetch balances error:', error);
+    }
+  };
+
+  const fetchSettlements = async () => {
+    try {
+      const res = await axios.get(`http://localhost:5000/api/settlements/group/${id}`);
+      setSettlements(res.data);
+    } catch (error) {
+      console.error('Fetch settlements error:', error);
     }
   };
 
@@ -134,6 +153,7 @@ const [expenseForm, setExpenseForm] = useState({
       );
     }
   };
+
   
   const handleCustomSplitChange = (userId, field, value) => {
     setCustomSplits(prev =>
@@ -238,6 +258,55 @@ const [expenseForm, setExpenseForm] = useState({
     );
   }
 
+  const handleSettlementChange = (e) => {
+    setSettlementForm({ ...settlementForm, [e.target.name]: e.target.value });
+  };
+  
+  const handleRecordSettlement = async (e) => {
+    e.preventDefault();
+    setError('');
+  
+    try {
+      await axios.post('http://localhost:5000/api/settlements', {
+        groupId: id,
+        paidBy: settlementForm.paidBy,
+        paidTo: settlementForm.paidTo,
+        amount: parseFloat(settlementForm.amount),
+        note: settlementForm.note,
+        date: new Date().toISOString()
+      });
+  
+      // Reset form
+      setSettlementForm({
+        paidBy: '',
+        paidTo: '',
+        amount: '',
+        note: ''
+      });
+      setShowRecordSettlement(false);
+  
+      // Refresh data
+      fetchSettlements();
+      fetchBalances();
+    } catch (error) {
+      setError(error.response?.data?.msg || 'Failed to record settlement');
+    }
+  };
+  
+  const handleDeleteSettlement = async (settlementId) => {
+    if (!window.confirm('Are you sure you want to delete this settlement?')) {
+      return;
+    }
+  
+    try {
+      await axios.delete(`http://localhost:5000/api/settlements/${settlementId}`);
+      fetchSettlements();
+      fetchBalances();
+    } catch (error) {
+      alert(error.response?.data?.msg || 'Failed to delete settlement');
+    }
+  };
+
   const isAdmin = 
     group.createdBy._id?.toString() === user?.id?.toString() || 
     group.createdBy._id?.toString() === user?._id?.toString() ||
@@ -302,24 +371,75 @@ const [expenseForm, setExpenseForm] = useState({
           </div>
         )}
 
-        {/* Who Owes What */}
-        {balances && balances.transactions && balances.transactions.length > 0 && (
-          <div style={styles.section}>
-            <h3 style={styles.sectionTitle}>Settlement Summary</h3>
-            <div style={styles.transactionsList}>
-              {balances.transactions.map((transaction, index) => (
-                <div key={index} style={styles.transactionCard}>
-                  <span style={styles.transactionFrom}>{transaction.from.name}</span>
-                  <span style={styles.transactionArrow}>→</span>
-                  <span style={styles.transactionTo}>{transaction.to.name}</span>
-                  <span style={styles.transactionAmount}>
-                    ₹{transaction.amount.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
+        {/* Settlement Summary */}
+{balances && balances.transactions && balances.transactions.length > 0 && (
+  <div style={styles.section}>
+    <h3 style={styles.sectionTitle}>Settlement Summary</h3>
+    
+    {/* Show Simplification Stats if algorithm saved transactions */}
+    {balances.simplificationStats && balances.simplificationStats.transactionsSaved > 0 && (
+      <div style={styles.simplificationBanner}>
+        <div style={styles.bannerIcon}>🎉</div>
+        <div style={styles.bannerContent}>
+          <div style={styles.bannerTitle}>Smart Settlement Detected!</div>
+          <div style={styles.bannerText}>
+            Our algorithm reduced <strong>{balances.simplificationStats.originalCount} transactions</strong> to just{' '}
+            <strong>{balances.simplificationStats.simplifiedCount} transactions</strong>!
+            <br />
+            <span style={styles.bannerHighlight}>
+              Save {balances.simplificationStats.percentageSaved}% effort with simplified settlements!
+            </span>
           </div>
-        )}
+        </div>
+      </div>
+    )}
+
+    {/* Simplified Transactions (Recommended) */}
+    {balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && (
+      <div style={styles.transactionsContainer}>
+        <div style={styles.transactionsHeader}>
+          <h4 style={styles.transactionsTitle}>✨ Optimized Settlements (Recommended)</h4>
+          <span style={styles.transactionsBadge}>
+            {balances.simplifiedTransactions.length} transaction{balances.simplifiedTransactions.length !== 1 ? 's' : ''}
+          </span>
+        </div>
+        <div style={styles.transactionsList}>
+          {balances.simplifiedTransactions.map((transaction, index) => (
+            <div key={index} style={styles.transactionCard}>
+              <span style={styles.transactionFrom}>{transaction.from.name}</span>
+              <span style={styles.transactionArrow}>→</span>
+              <span style={styles.transactionTo}>{transaction.to.name}</span>
+              <span style={styles.transactionAmount}>
+                ₹{transaction.amount.toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+
+    {/* Original Transactions (For Comparison) */}
+    {balances.simplificationStats && balances.simplificationStats.transactionsSaved > 0 && (
+      <details style={styles.detailsContainer}>
+        <summary style={styles.detailsSummary}>
+          📊 Show Original Settlements ({balances.transactions.length} transactions)
+        </summary>
+        <div style={styles.transactionsList}>
+          {balances.transactions.map((transaction, index) => (
+            <div key={index} style={{ ...styles.transactionCard, opacity: 0.7 }}>
+              <span style={styles.transactionFrom}>{transaction.from.name}</span>
+              <span style={styles.transactionArrow}>→</span>
+              <span style={styles.transactionTo}>{transaction.to.name}</span>
+              <span style={styles.transactionAmount}>
+                ₹{transaction.amount.toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </details>
+    )}
+  </div>
+)}
 
         {/* Expenses Section */}
         <div style={styles.section}>
@@ -508,31 +628,256 @@ const [expenseForm, setExpenseForm] = useState({
   </div>
 )}
 
-          <div style={styles.membersList}>
-            {group.members.map(member => (
-              <div key={member._id} style={styles.memberCard}>
-                <div style={styles.memberInfo}>
-                  <div style={styles.memberName}>
+{/* Settlement Recording Section */}
+{balances && balances.transactions && balances.transactions.length > 0 && (
+  <div style={styles.section}>
+    <div style={styles.sectionHeader}>
+      <h3 style={styles.sectionTitle}>Record Settlement</h3>
+      <button 
+        onClick={() => setShowRecordSettlement(!showRecordSettlement)} 
+        style={styles.addBtn}
+      >
+        {showRecordSettlement ? 'Cancel' : '💰 Settle Up'}
+      </button>
+    </div>
+
+    {showRecordSettlement && (
+      <div style={styles.addForm}>
+        {error && <div style={styles.errorBox}>{error}</div>}
+        <form onSubmit={handleRecordSettlement}>
+          <div style={styles.formRow}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Who Paid? *</label>
+              <select
+                name="paidBy"
+                value={settlementForm.paidBy}
+                onChange={handleSettlementChange}
+                required
+                style={styles.input}
+              >
+                <option value="">Select person</option>
+                {group.members.map(member => (
+                  <option key={member._id} value={member._id}>
                     {member.name}
-                    {(member._id === group.createdBy._id || member._id === group.createdBy.id) && (
-                      <span style={styles.adminBadge}>ADMIN</span>
-                    )}
-                  </div>
-                  <div style={styles.memberEmail}>{member.email}</div>
-                </div>
-                {isAdmin && 
-                 member._id?.toString() !== group.createdBy._id?.toString() && 
-                 member._id?.toString() !== group.createdBy.id?.toString() && (
-                  <button
-                    onClick={() => handleRemoveMember(member._id)}
-                    style={styles.removeBtn}
-                  >
-                    Remove
-                  </button>
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Paid To? *</label>
+              <select
+                name="paidTo"
+                value={settlementForm.paidTo}
+                onChange={handleSettlementChange}
+                required
+                style={styles.input}
+              >
+                <option value="">Select person</option>
+                {group.members.map(member => (
+                  <option key={member._id} value={member._id}>
+                    {member.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div style={styles.formRow}>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Amount (₹) *</label>
+              <input
+                type="number"
+                name="amount"
+                placeholder="0.00"
+                value={settlementForm.amount}
+                onChange={handleSettlementChange}
+                required
+                min="0.01"
+                step="0.01"
+                style={styles.input}
+              />
+            </div>
+            <div style={styles.formGroup}>
+              <label style={styles.label}>Note (Optional)</label>
+              <input
+                type="text"
+                name="note"
+                placeholder="e.g., Paid via UPI"
+                value={settlementForm.note}
+                onChange={handleSettlementChange}
+                style={styles.input}
+              />
+            </div>
+          </div>
+
+          <button type="submit" style={styles.submitBtn}>
+            Record Settlement
+          </button>
+        </form>
+      </div>
+    )}
+
+    {/* Quick Settlement Buttons */}
+{balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && !showRecordSettlement &&(
+  <div style={styles.quickSettlements}>
+    <p style={styles.quickSettleLabel}>💡 Quick Settle (Optimized):</p>
+    {balances.transactions.map((transaction, index) => (
+      <button
+        key={index}
+        onClick={() => {
+          setSettlementForm({
+            paidBy: transaction.from.userId.toString(),
+            paidTo: transaction.to.userId.toString(),
+            amount: transaction.amount.toFixed(2),
+            note: 'Quick settlement'
+          });
+          setShowRecordSettlement(true);
+        }}
+        style={styles.quickSettleBtn}
+      >
+        💰 {transaction.from.name} pays {transaction.to.name} ₹{transaction.amount.toFixed(2)}
+      </button>
+    ))}
+  </div>
+)}
+  </div>
+)}
+
+{/* Settlement History */}
+{settlements.length > 0 && (
+  <div style={styles.section}>
+    <h3 style={styles.sectionTitle}>Settlement History ({settlements.length})</h3>
+    <div style={styles.settlementsList}>
+      {settlements.map(settlement => (
+        <div key={settlement._id} style={styles.settlementCard}>
+          <div style={styles.settlementHeader}>
+            <div>
+              <div style={styles.settlementTransaction}>
+                <span style={styles.settlementPaidBy}>{settlement.paidBy.name}</span>
+                <span style={styles.settlementArrow}>→</span>
+                <span style={styles.settlementPaidTo}>{settlement.paidTo.name}</span>
+              </div>
+              <div style={styles.settlementMeta}>
+                <span style={styles.settlementDate}>
+                  {new Date(settlement.date).toLocaleDateString()}
+                </span>
+                {settlement.note && (
+                  <span style={styles.settlementNote}>"{settlement.note}"</span>
                 )}
               </div>
-            ))}
+            </div>
+            <div style={styles.settlementRight}>
+              <div style={styles.settlementAmount}>₹{settlement.amount.toFixed(2)}</div>
+              {(settlement.createdBy._id === (user?.id || user?._id) || isAdmin) && (
+                <button
+                  onClick={() => handleDeleteSettlement(settlement._id)}
+                  style={styles.deleteSettlementBtn}
+                >
+                  Delete
+                </button>
+              )}
+            </div>
           </div>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+      {/* Members Section */}
+<div style={styles.section}>
+  <div style={styles.sectionHeader}>
+    <h3 style={styles.sectionTitle}>
+      👥 Members ({group.members.length})
+    </h3>
+    {/* Only members can add new members */}
+    {group.members.some(m => 
+      (m._id || m.id)?.toString() === (user?.id || user?._id)?.toString()
+    ) && (
+      <button 
+        onClick={() => {
+          setShowAddMember(!showAddMember);
+          setError('');
+        }} 
+        style={styles.addBtn}
+      >
+        {showAddMember ? '✕ Cancel' : '+ Add Member'}
+      </button>
+    )}
+  </div>
+
+  {/* Add Member Form */}
+  {showAddMember && (
+    <div style={styles.addMemberForm}>
+      <h4 style={styles.addMemberTitle}>Add New Member</h4>
+      {error && <div style={styles.errorBox}>{error}</div>}
+      <form onSubmit={handleAddMember} style={styles.addMemberFormInner}>
+        <div style={styles.addMemberInputGroup}>
+          <input
+            type="email"
+            placeholder="Enter member's email address"
+            value={memberEmail}
+            onChange={(e) => setMemberEmail(e.target.value)}
+            required
+            style={styles.addMemberInput}
+            autoFocus
+          />
+          <button type="submit" style={styles.addMemberSubmitBtn}>
+            Add Member
+          </button>
+        </div>
+        <small style={styles.helpText}>
+          💡 The person must have a SettleUp account with this email
+        </small>
+      </form>
+    </div>
+  )}
+
+  {/* Members List */}
+  <div style={styles.membersList}>
+    {group.members.map(member => {
+      // Safely extract IDs
+      const memberId = (member._id || member.id)?.toString();
+      const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
+      const currentUserId = (user?.id || user?._id)?.toString();
+
+      // Determine badges and permissions
+      const isCreator = memberId === creatorId;
+      const isCurrentUser = memberId === currentUserId;
+      const canRemove = isAdmin && !isCreator;
+
+      return (
+        <div key={member._id} style={styles.memberCard}>
+          <div style={styles.memberInfo}>
+            <div style={styles.memberAvatar}>
+              {member.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div style={styles.memberName}>
+                {member.name}
+                {isCreator && (
+                  <span style={styles.adminBadge}>ADMIN</span>
+                )}
+                {isCurrentUser && (
+                  <span style={styles.youBadge}>YOU</span>
+                )}
+              </div>
+              <div style={styles.memberEmail}>{member.email}</div>
+            </div>
+          </div>
+          {canRemove && (
+            <button
+              onClick={() => handleRemoveMember(member._id)}
+              style={styles.removeBtn}
+            >
+              Remove
+            </button>
+          )}
+        </div>
+      );
+    })}
+  </div>
+</div>
+          
         </div>
       </div>
     </div>
@@ -540,6 +885,147 @@ const [expenseForm, setExpenseForm] = useState({
 }
 
 const styles = {
+  // Update/add these styles
+addMemberForm: {
+  marginBottom: '24px',
+  padding: '24px',
+  backgroundColor: '#f0f8ff',
+  borderRadius: '8px',
+  border: '2px dashed #1cc29f'
+},
+addMemberTitle: {
+  margin: '0 0 16px 0',
+  fontSize: '16px',
+  color: '#333',
+  fontWeight: '600'
+},
+addMemberFormInner: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+},
+addMemberInputGroup: {
+  display: 'flex',
+  gap: '12px'
+},
+addMemberInput: {
+  flex: 1,
+  padding: '12px 16px',
+  border: '2px solid #1cc29f',
+  borderRadius: '6px',
+  fontSize: '15px',
+  outline: 'none',
+  transition: 'border-color 0.3s'
+},
+addMemberSubmitBtn: {
+  padding: '12px 24px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  border: 'none',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '15px',
+  fontWeight: '600',
+  whiteSpace: 'nowrap',
+  transition: 'background-color 0.3s'
+},
+memberAvatar: {
+  width: '48px',
+  height: '48px',
+  borderRadius: '50%',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '20px',
+  fontWeight: '700',
+  marginRight: '16px'
+},
+youBadge: {
+  fontSize: '11px',
+  backgroundColor: '#6c757d',
+  color: 'white',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  fontWeight: '600',
+  marginLeft: '8px'
+},
+simplificationBanner: {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: '16px',
+  padding: '20px',
+  backgroundColor: '#e8f5e9',
+  border: '2px solid #4caf50',
+  borderRadius: '8px',
+  marginBottom: '24px'
+},
+bannerIcon: {
+  fontSize: '32px'
+},
+bannerContent: {
+  flex: 1
+},
+bannerTitle: {
+  fontSize: '18px',
+  fontWeight: '700',
+  color: '#2e7d32',
+  marginBottom: '8px'
+},
+bannerText: {
+  fontSize: '14px',
+  color: '#1b5e20',
+  lineHeight: '1.6'
+},
+bannerHighlight: {
+  display: 'inline-block',
+  marginTop: '8px',
+  padding: '4px 8px',
+  backgroundColor: '#4caf50',
+  color: 'white',
+  borderRadius: '4px',
+  fontSize: '13px',
+  fontWeight: '600'
+},
+transactionsContainer: {
+  marginBottom: '20px'
+},
+transactionsHeader: {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '16px'
+},
+transactionsTitle: {
+  margin: 0,
+  fontSize: '16px',
+  color: '#333',
+  fontWeight: '600'
+},
+transactionsBadge: {
+  padding: '6px 12px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  borderRadius: '12px',
+  fontSize: '13px',
+  fontWeight: '600'
+},
+detailsContainer: {
+  marginTop: '20px',
+  padding: '16px',
+  backgroundColor: '#f8f9fa',
+  borderRadius: '6px',
+  border: '1px solid #dee2e6'
+},
+detailsSummary: {
+  cursor: 'pointer',
+  fontWeight: '600',
+  color: '#666',
+  fontSize: '14px',
+  padding: '8px',
+  userSelect: 'none'
+},
   container: {
     minHeight: '100vh',
     backgroundColor: '#f5f5f5'
@@ -873,6 +1359,7 @@ const styles = {
     backgroundColor: '#fafafa'
   },
   memberInfo: {
+    display: 'flex',
     flex: 1
   },
   memberName: {
@@ -987,7 +1474,99 @@ splitInfo: {
     fontSize: '13px',
     color: '#666',
     fontStyle: 'italic'
-  }
+  },
+  // Add these to existing styles object
+quickSettlements: {
+  marginTop: '20px'
+},
+quickSettleLabel: {
+  fontSize: '14px',
+  color: '#666',
+  marginBottom: '12px',
+  fontWeight: '500'
+},
+quickSettleBtn: {
+  display: 'block',
+  width: '100%',
+  padding: '14px',
+  backgroundColor: '#fff',
+  border: '2px solid #1cc29f',
+  borderRadius: '6px',
+  color: '#1cc29f',
+  fontWeight: '600',
+  cursor: 'pointer',
+  marginBottom: '10px',
+  fontSize: '15px',
+  transition: 'all 0.3s'
+},
+settlementsList: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+},
+settlementCard: {
+  padding: '20px',
+  border: '1px solid #e8f5e9',
+  borderRadius: '8px',
+  backgroundColor: '#f1f8f4'
+},
+settlementHeader: {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center'
+},
+settlementTransaction: {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '12px',
+  marginBottom: '8px'
+},
+settlementPaidBy: {
+  fontWeight: '600',
+  color: '#333',
+  fontSize: '16px'
+},
+settlementArrow: {
+  color: '#28a745',
+  fontSize: '20px',
+  fontWeight: '700'
+},
+settlementPaidTo: {
+  fontWeight: '600',
+  color: '#333',
+  fontSize: '16px'
+},
+settlementMeta: {
+  display: 'flex',
+  gap: '12px',
+  fontSize: '13px'
+},
+settlementDate: {
+  color: '#666'
+},
+settlementNote: {
+  color: '#1cc29f',
+  fontStyle: 'italic'
+},
+settlementRight: {
+  textAlign: 'right'
+},
+settlementAmount: {
+  fontSize: '24px',
+  fontWeight: '700',
+  color: '#28a745',
+  marginBottom: '8px'
+},
+deleteSettlementBtn: {
+  padding: '6px 14px',
+  backgroundColor: '#dc3545',
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: '500'
+}
 
   
 };
