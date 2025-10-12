@@ -2,6 +2,7 @@ import { useState, useEffect, useContext } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
+import ExpenseAnalytics from '../components/ExpenseAnalytics';
 
 function GroupDetail() {
   const { id } = useParams();
@@ -16,10 +17,10 @@ function GroupDetail() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [error, setError] = useState('');
+  const [activeTab, setActiveTab] = useState('expenses'); // NEW: Tab state
 
   // Expense form state
-  // Expense form state
-const [expenseForm, setExpenseForm] = useState({
+  const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
     paidBy: '',
@@ -27,9 +28,18 @@ const [expenseForm, setExpenseForm] = useState({
     category: 'Other',
     date: new Date().toISOString().split('T')[0]
   });
-  
-  // For unequal/percentage splits
+
   const [customSplits, setCustomSplits] = useState([]);
+
+  // Settlement state
+  const [settlements, setSettlements] = useState([]);
+  const [showRecordSettlement, setShowRecordSettlement] = useState(false);
+  const [settlementForm, setSettlementForm] = useState({
+    paidBy: '',
+    paidTo: '',
+    amount: '',
+    note: ''
+  });
 
   useEffect(() => {
     fetchGroup();
@@ -38,20 +48,10 @@ const [expenseForm, setExpenseForm] = useState({
     fetchSettlements();
   }, [id]);
 
-  const [settlements, setSettlements] = useState([]);
-const [showRecordSettlement, setShowRecordSettlement] = useState(false);
-const [settlementForm, setSettlementForm] = useState({
-  paidBy: '',
-  paidTo: '',
-  amount: '',
-  note: ''
-});
-
   const fetchGroup = async () => {
     try {
       const res = await axios.get(`http://localhost:5000/api/groups/${id}`);
       setGroup(res.data);
-      // Set paidBy to current user by default
       setExpenseForm(prev => ({ ...prev, paidBy: user?.id || user?._id }));
       setLoading(false);
     } catch (error) {
@@ -138,7 +138,6 @@ const [settlementForm, setSettlementForm] = useState({
     const newSplitType = e.target.value;
     setExpenseForm({ ...expenseForm, splitType: newSplitType });
     
-    // Initialize custom splits when switching to unequal/percentage
     if ((newSplitType === 'unequal' || newSplitType === 'percentage') && group) {
       const amount = parseFloat(expenseForm.amount) || 0;
       const equalAmount = amount / group.members.length;
@@ -154,7 +153,6 @@ const [settlementForm, setSettlementForm] = useState({
     }
   };
 
-  
   const handleCustomSplitChange = (userId, field, value) => {
     setCustomSplits(prev =>
       prev.map(split =>
@@ -162,13 +160,13 @@ const [settlementForm, setSettlementForm] = useState({
       )
     );
   };
-  
+
   const calculateRemainingAmount = () => {
     const total = parseFloat(expenseForm.amount) || 0;
     const allocated = customSplits.reduce((sum, split) => sum + (parseFloat(split.amount) || 0), 0);
     return (total - allocated).toFixed(2);
   };
-  
+
   const calculateRemainingPercentage = () => {
     const allocated = customSplits.reduce((sum, split) => sum + (parseFloat(split.percentage) || 0), 0);
     return (100 - allocated).toFixed(2);
@@ -177,7 +175,7 @@ const [settlementForm, setSettlementForm] = useState({
   const handleAddExpense = async (e) => {
     e.preventDefault();
     setError('');
-  
+
     try {
       const expenseData = {
         groupId: id,
@@ -188,8 +186,7 @@ const [settlementForm, setSettlementForm] = useState({
         category: expenseForm.category,
         date: expenseForm.date
       };
-  
-      // Add split details for unequal/percentage splits
+
       if (expenseForm.splitType === 'unequal') {
         expenseData.splitDetails = customSplits.map(split => ({
           userId: split.userId,
@@ -201,10 +198,9 @@ const [settlementForm, setSettlementForm] = useState({
           percentage: parseFloat(split.percentage)
         }));
       }
-  
+
       await axios.post('http://localhost:5000/api/expenses', expenseData);
-  
-      // Reset form
+
       setExpenseForm({
         description: '',
         amount: '',
@@ -215,10 +211,9 @@ const [settlementForm, setSettlementForm] = useState({
       });
       setCustomSplits([]);
       setShowAddExpense(false);
-  
-      // Refresh data
-      fetchExpenses();
-      fetchBalances();
+
+      await fetchExpenses();
+      await fetchBalances();
     } catch (error) {
       setError(error.response?.data?.msg || 'Failed to add expense');
     }
@@ -231,10 +226,76 @@ const [settlementForm, setSettlementForm] = useState({
 
     try {
       await axios.delete(`http://localhost:5000/api/expenses/${expenseId}`);
-      fetchExpenses();
-      fetchBalances();
+      await fetchExpenses();
+      await fetchBalances();
+      alert('Expense deleted successfully!');
     } catch (error) {
+      console.error('Delete expense error:', error);
       alert(error.response?.data?.msg || 'Failed to delete expense');
+    }
+  };
+
+  const handleSettlementChange = (e) => {
+    setSettlementForm({ ...settlementForm, [e.target.name]: e.target.value });
+  };
+
+  const handleRecordSettlement = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (!settlementForm.paidBy || !settlementForm.paidTo) {
+      setError('Please select both payer and receiver');
+      return;
+    }
+
+    if (settlementForm.paidBy === settlementForm.paidTo) {
+      setError('Cannot settle with yourself');
+      return;
+    }
+
+    if (!settlementForm.amount || parseFloat(settlementForm.amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      await axios.post('http://localhost:5000/api/settlements', {
+        groupId: id,
+        paidBy: settlementForm.paidBy,
+        paidTo: settlementForm.paidTo,
+        amount: parseFloat(settlementForm.amount),
+        note: settlementForm.note || '',
+        date: new Date().toISOString()
+      });
+
+      setSettlementForm({
+        paidBy: '',
+        paidTo: '',
+        amount: '',
+        note: ''
+      });
+      setShowRecordSettlement(false);
+
+      await fetchSettlements();
+      await fetchBalances();
+      
+      alert('Settlement recorded successfully!');
+    } catch (error) {
+      setError(error.response?.data?.msg || 'Failed to record settlement');
+    }
+  };
+
+  const handleDeleteSettlement = async (settlementId) => {
+    if (!window.confirm('Are you sure you want to delete this settlement?')) {
+      return;
+    }
+
+    try {
+      await axios.delete(`http://localhost:5000/api/settlements/${settlementId}`);
+      await fetchSettlements();
+      await fetchBalances();
+    } catch (error) {
+      alert(error.response?.data?.msg || 'Failed to delete settlement');
     }
   };
 
@@ -258,62 +319,12 @@ const [settlementForm, setSettlementForm] = useState({
     );
   }
 
-  const handleSettlementChange = (e) => {
-    setSettlementForm({ ...settlementForm, [e.target.name]: e.target.value });
-  };
-  
-  const handleRecordSettlement = async (e) => {
-    e.preventDefault();
-    setError('');
-  
-    try {
-      await axios.post('http://localhost:5000/api/settlements', {
-        groupId: id,
-        paidBy: settlementForm.paidBy,
-        paidTo: settlementForm.paidTo,
-        amount: parseFloat(settlementForm.amount),
-        note: settlementForm.note,
-        date: new Date().toISOString()
-      });
-  
-      // Reset form
-      setSettlementForm({
-        paidBy: '',
-        paidTo: '',
-        amount: '',
-        note: ''
-      });
-      setShowRecordSettlement(false);
-  
-      // Refresh data
-      fetchSettlements();
-      fetchBalances();
-    } catch (error) {
-      setError(error.response?.data?.msg || 'Failed to record settlement');
-    }
-  };
-  
-  const handleDeleteSettlement = async (settlementId) => {
-    if (!window.confirm('Are you sure you want to delete this settlement?')) {
-      return;
-    }
-  
-    try {
-      await axios.delete(`http://localhost:5000/api/settlements/${settlementId}`);
-      fetchSettlements();
-      fetchBalances();
-    } catch (error) {
-      alert(error.response?.data?.msg || 'Failed to delete settlement');
-    }
-  };
-
   const isAdmin = 
     group.createdBy._id?.toString() === user?.id?.toString() || 
     group.createdBy._id?.toString() === user?._id?.toString() ||
     group.createdBy.id?.toString() === user?.id?.toString() ||
     group.createdBy.id?.toString() === user?._id?.toString();
 
-  // Get current user's balance
   const myBalance = balances?.balances?.find(
     b => b.userId.toString() === (user?.id || user?._id).toString()
   );
@@ -372,586 +383,720 @@ const [settlementForm, setSettlementForm] = useState({
         )}
 
         {/* Settlement Summary */}
-{balances && balances.transactions && balances.transactions.length > 0 && (
-  <div style={styles.section}>
-    <h3 style={styles.sectionTitle}>Settlement Summary</h3>
-    
-    {/* Show Simplification Stats if algorithm saved transactions */}
-    {balances.simplificationStats && balances.simplificationStats.transactionsSaved > 0 && (
-      <div style={styles.simplificationBanner}>
-        <div style={styles.bannerIcon}>🎉</div>
-        <div style={styles.bannerContent}>
-          <div style={styles.bannerTitle}>Smart Settlement Detected!</div>
-          <div style={styles.bannerText}>
-            Our algorithm reduced <strong>{balances.simplificationStats.originalCount} transactions</strong> to just{' '}
-            <strong>{balances.simplificationStats.simplifiedCount} transactions</strong>!
-            <br />
-            <span style={styles.bannerHighlight}>
-              Save {balances.simplificationStats.percentageSaved}% effort with simplified settlements!
-            </span>
+        {balances && balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && (
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>Settlement Summary</h3>
+            
+            {balances.simplificationStats && balances.simplificationStats.transactionsSaved > 0 && (
+              <div style={styles.simplificationBanner}>
+                <div style={styles.bannerIcon}>🎉</div>
+                <div style={styles.bannerContent}>
+                  <div style={styles.bannerTitle}>Smart Settlement Detected!</div>
+                  <div style={styles.bannerText}>
+                    Our algorithm reduced <strong>{balances.simplificationStats.originalCount} transactions</strong> to just{' '}
+                    <strong>{balances.simplificationStats.simplifiedCount} transactions</strong>!
+                    <br />
+                    <span style={styles.bannerHighlight}>
+                      Save {balances.simplificationStats.percentageSaved}% effort!
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div style={styles.transactionsContainer}>
+              <div style={styles.transactionsHeader}>
+                <h4 style={styles.transactionsTitle}>✨ Optimized Settlements</h4>
+                <span style={styles.transactionsBadge}>
+                  {balances.simplifiedTransactions.length} transaction{balances.simplifiedTransactions.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <div style={styles.transactionsList}>
+                {balances.simplifiedTransactions.map((transaction, index) => (
+                  <div key={index} style={styles.transactionCard}>
+                    <span style={styles.transactionFrom}>{transaction.from.name}</span>
+                    <span style={styles.transactionArrow}>→</span>
+                    <span style={styles.transactionTo}>{transaction.to.name}</span>
+                    <span style={styles.transactionAmount}>
+                      ₹{transaction.amount.toFixed(2)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
-    )}
+        )}
 
-    {/* Simplified Transactions (Recommended) */}
-    {balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && (
-      <div style={styles.transactionsContainer}>
-        <div style={styles.transactionsHeader}>
-          <h4 style={styles.transactionsTitle}>✨ Optimized Settlements (Recommended)</h4>
-          <span style={styles.transactionsBadge}>
-            {balances.simplifiedTransactions.length} transaction{balances.simplifiedTransactions.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        <div style={styles.transactionsList}>
-          {balances.simplifiedTransactions.map((transaction, index) => (
-            <div key={index} style={styles.transactionCard}>
-              <span style={styles.transactionFrom}>{transaction.from.name}</span>
-              <span style={styles.transactionArrow}>→</span>
-              <span style={styles.transactionTo}>{transaction.to.name}</span>
-              <span style={styles.transactionAmount}>
-                ₹{transaction.amount.toFixed(2)}
-              </span>
+        {/* Record Settlement */}
+        {balances && balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && (
+          <div style={styles.section}>
+            <div style={styles.sectionHeader}>
+              <h3 style={styles.sectionTitle}>Record Settlement</h3>
+              <button 
+                onClick={() => setShowRecordSettlement(!showRecordSettlement)} 
+                style={styles.addBtn}
+              >
+                {showRecordSettlement ? 'Cancel' : '💰 Settle Up'}
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
-    )}
 
-    {/* Original Transactions (For Comparison) */}
-    {balances.simplificationStats && balances.simplificationStats.transactionsSaved > 0 && (
-      <details style={styles.detailsContainer}>
-        <summary style={styles.detailsSummary}>
-          📊 Show Original Settlements ({balances.transactions.length} transactions)
-        </summary>
-        <div style={styles.transactionsList}>
-          {balances.transactions.map((transaction, index) => (
-            <div key={index} style={{ ...styles.transactionCard, opacity: 0.7 }}>
-              <span style={styles.transactionFrom}>{transaction.from.name}</span>
-              <span style={styles.transactionArrow}>→</span>
-              <span style={styles.transactionTo}>{transaction.to.name}</span>
-              <span style={styles.transactionAmount}>
-                ₹{transaction.amount.toFixed(2)}
-              </span>
+            {showRecordSettlement && (
+              <div style={styles.addForm}>
+                {error && <div style={styles.errorBox}>{error}</div>}
+                <form onSubmit={handleRecordSettlement}>
+                  <div style={styles.formRow}>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Who Paid? *</label>
+                      <select
+                        name="paidBy"
+                        value={settlementForm.paidBy}
+                        onChange={handleSettlementChange}
+                        required
+                        style={styles.input}
+                      >
+                        <option value="">Select person</option>
+                        {group.members.map(member => (
+                          <option key={member._id} value={member._id}>
+                            {member.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Paid To? *</label>
+                      <select
+                        name="paidTo"
+                        value={settlementForm.paidTo}
+                        onChange={handleSettlementChange}
+                        required
+                        style={styles.input}
+                      >
+                        <option value="">Select person</option>
+                        {group.members.map(member => (
+                          <option key={member._id} value={member._id}>
+                            {member.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={styles.formRow}>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Amount (₹) *</label>
+                      <input
+                        type="number"
+                        name="amount"
+                        placeholder="0.00"
+                        value={settlementForm.amount}
+                        onChange={handleSettlementChange}
+                        required
+                        min="0.01"
+                        step="0.01"
+                        style={styles.input}
+                      />
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Note (Optional)</label>
+                      <input
+                        type="text"
+                        name="note"
+                        placeholder="e.g., Paid via UPI"
+                        value={settlementForm.note}
+                        onChange={handleSettlementChange}
+                        style={styles.input}
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" style={styles.submitBtn}>
+                    Record Settlement
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {balances.simplifiedTransactions.length > 0 && !showRecordSettlement && (
+              <div style={styles.quickSettlements}>
+                <p style={styles.quickSettleLabel}>💡 Quick Settle:</p>
+                {balances.simplifiedTransactions.map((transaction, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSettlementForm({
+                        paidBy: transaction.from.userId.toString(),
+                        paidTo: transaction.to.userId.toString(),
+                        amount: transaction.amount.toFixed(2),
+                        note: 'Quick settlement'
+                      });
+                      setShowRecordSettlement(true);
+                    }}
+                    style={styles.quickSettleBtn}
+                  >
+                    💰 {transaction.from.name} pays {transaction.to.name} ₹{transaction.amount.toFixed(2)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settlement History */}
+        {settlements.length > 0 && (
+          <div style={styles.section}>
+            <h3 style={styles.sectionTitle}>Settlement History ({settlements.length})</h3>
+            <div style={styles.settlementsList}>
+              {settlements.map(settlement => (
+                <div key={settlement._id} style={styles.settlementCard}>
+                  <div style={styles.settlementHeader}>
+                    <div>
+                      <div style={styles.settlementTransaction}>
+                        <span style={styles.settlementPaidBy}>{settlement.paidBy.name}</span>
+                        <span style={styles.settlementArrow}>→</span>
+                        <span style={styles.settlementPaidTo}>{settlement.paidTo.name}</span>
+                      </div>
+                      <div style={styles.settlementMeta}>
+                        <span style={styles.settlementDate}>
+                          {new Date(settlement.date).toLocaleDateString()}
+                        </span>
+                        {settlement.note && (
+                          <span style={styles.settlementNote}>"{settlement.note}"</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={styles.settlementRight}>
+                      <div style={styles.settlementAmount}>₹{settlement.amount.toFixed(2)}</div>
+                      {(settlement.createdBy._id === (user?.id || user?._id) || isAdmin) && (
+                        <button
+                          onClick={() => handleDeleteSettlement(settlement._id)}
+                          style={styles.deleteSettlementBtn}
+                        >
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      </details>
-    )}
-  </div>
-)}
+          </div>
+        )}
 
-        {/* Expenses Section */}
+        {/* EXPENSES AND ANALYTICS WITH TABS */}
         <div style={styles.section}>
-          <div style={styles.sectionHeader}>
-            <h3 style={styles.sectionTitle}>Expenses ({expenses.length})</h3>
-            <button 
-              onClick={() => setShowAddExpense(!showAddExpense)} 
-              style={styles.addBtn}
+          {/* Tab Navigation */}
+          <div style={styles.tabContainer}>
+            <button
+              onClick={() => setActiveTab('expenses')}
+              style={{
+                ...styles.tab,
+                ...(activeTab === 'expenses' ? styles.tabActive : {})
+              }}
             >
-              {showAddExpense ? 'Cancel' : '+ Add Expense'}
+              📝 Expenses ({expenses.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('analytics')}
+              style={{
+                ...styles.tab,
+                ...(activeTab === 'analytics' ? styles.tabActive : {})
+              }}
+            >
+              📊 Analytics
             </button>
           </div>
 
-          {/* Add Expense Form */}
-{showAddExpense && (
-  <div style={styles.addForm}>
-    {error && <div style={styles.errorBox}>{error}</div>}
-    <form onSubmit={handleAddExpense}>
-      <div style={styles.formRow}>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Description *</label>
-          <input
-            type="text"
-            name="description"
-            placeholder="e.g., Dinner at restaurant"
-            value={expenseForm.description}
-            onChange={handleExpenseChange}
-            required
-            style={styles.input}
-          />
-        </div>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Amount (₹) *</label>
-          <input
-            type="number"
-            name="amount"
-            placeholder="0.00"
-            value={expenseForm.amount}
-            onChange={handleExpenseChange}
-            required
-            min="0.01"
-            step="0.01"
-            style={styles.input}
-          />
-        </div>
-      </div>
-
-      <div style={styles.formRow}>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Paid By *</label>
-          <select
-            name="paidBy"
-            value={expenseForm.paidBy}
-            onChange={handleExpenseChange}
-            required
-            style={styles.input}
-          >
-            {group.members.map(member => (
-              <option key={member._id} value={member._id}>
-                {member.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Category</label>
-          <select
-            name="category"
-            value={expenseForm.category}
-            onChange={handleExpenseChange}
-            style={styles.input}
-          >
-            <option value="Food">Food</option>
-            <option value="Transport">Transport</option>
-            <option value="Accommodation">Accommodation</option>
-            <option value="Entertainment">Entertainment</option>
-            <option value="Shopping">Shopping</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-      </div>
-
-      <div style={styles.formRow}>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Date</label>
-          <input
-            type="date"
-            name="date"
-            value={expenseForm.date}
-            onChange={handleExpenseChange}
-            style={styles.input}
-          />
-        </div>
-        <div style={styles.formGroup}>
-          <label style={styles.label}>Split Type *</label>
-          <select
-            value={expenseForm.splitType}
-            onChange={handleSplitTypeChange}
-            style={styles.input}
-          >
-            <option value="equal">Equal Split</option>
-            <option value="unequal">Unequal (Custom Amounts)</option>
-            <option value="percentage">Percentage Split</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Equal Split Info */}
-      {expenseForm.splitType === 'equal' && expenseForm.amount && (
-        <div style={styles.splitInfo}>
-          💡 Split equally: ₹{(parseFloat(expenseForm.amount) / group.members.length).toFixed(2)} per person
-        </div>
-      )}
-
-      {/* Unequal Split Inputs */}
-      {expenseForm.splitType === 'unequal' && customSplits.length > 0 && (
-        <div style={styles.customSplitSection}>
-          <div style={styles.splitHeader}>
-            <label style={styles.label}>Custom Amounts</label>
-            <div style={styles.remainingAmount}>
-              Remaining: ₹{calculateRemainingAmount()}
-            </div>
-          </div>
-          {customSplits.map(split => (
-            <div key={split.userId} style={styles.splitRow}>
-              <span style={styles.splitName}>{split.name}</span>
-              <input
-                type="number"
-                placeholder="0.00"
-                value={split.amount}
-                onChange={(e) => handleCustomSplitChange(split.userId, 'amount', e.target.value)}
-                min="0"
-                step="0.01"
-                style={styles.splitInput}
-              />
-            </div>
-          ))}
-          <small style={styles.helpText}>
-            ⚠️ Total must equal ₹{expenseForm.amount || '0.00'}
-          </small>
-        </div>
-      )}
-
-      {/* Percentage Split Inputs */}
-      {expenseForm.splitType === 'percentage' && customSplits.length > 0 && (
-        <div style={styles.customSplitSection}>
-          <div style={styles.splitHeader}>
-            <label style={styles.label}>Split by Percentage</label>
-            <div style={styles.remainingAmount}>
-              Remaining: {calculateRemainingPercentage()}%
-            </div>
-          </div>
-          {customSplits.map(split => (
-            <div key={split.userId} style={styles.splitRow}>
-              <span style={styles.splitName}>{split.name}</span>
-              <div style={styles.percentageInput}>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={split.percentage}
-                  onChange={(e) => handleCustomSplitChange(split.userId, 'percentage', e.target.value)}
-                  min="0"
-                  max="100"
-                  step="0.01"
-                  style={styles.splitInput}
-                />
-                <span style={styles.percentSymbol}>%</span>
-                {expenseForm.amount && (
-                  <span style={styles.amountPreview}>
-                    = ₹{((parseFloat(expenseForm.amount) * parseFloat(split.percentage || 0)) / 100).toFixed(2)}
-                  </span>
-                )}
+          {/* EXPENSES TAB */}
+          {activeTab === 'expenses' && (
+            <>
+              <div style={styles.sectionHeader}>
+                <h3 style={styles.sectionTitle}>Expenses ({expenses.length})</h3>
+                <button 
+                  onClick={() => setShowAddExpense(!showAddExpense)} 
+                  style={styles.addBtn}
+                >
+                  {showAddExpense ? 'Cancel' : '+ Add Expense'}
+                </button>
               </div>
-            </div>
-          ))}
-          <small style={styles.helpText}>
-            ⚠️ Total must equal 100%
-          </small>
-        </div>
-      )}
 
-      <button type="submit" style={styles.submitBtn}>
-        Add Expense
-      </button>
-    </form>
+              {/* Add Expense Form */}
+              {showAddExpense && (
+                <div style={styles.addForm}>
+                  {error && <div style={styles.errorBox}>{error}</div>}
+                  <form onSubmit={handleAddExpense}>
+                    <div style={styles.formRow}>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Description *</label>
+                        <input
+                          type="text"
+                          name="description"
+                          placeholder="e.g., Dinner at restaurant"
+                          value={expenseForm.description}
+                          onChange={handleExpenseChange}
+                          required
+                          style={styles.input}
+                        />
+                      </div>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Amount (₹) *</label>
+                        <input
+                          type="number"
+                          name="amount"
+                          placeholder="0.00"
+                          value={expenseForm.amount}
+                          onChange={handleExpenseChange}
+                          required
+                          min="0.01"
+                          step="0.01"
+                          style={styles.input}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={styles.formRow}>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Paid By *</label>
+                        <select
+                          name="paidBy"
+                          value={expenseForm.paidBy}
+                          onChange={handleExpenseChange}
+                          required
+                          style={styles.input}
+                        >
+                          {group.members.map(member => (
+                            <option key={member._id} value={member._id}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Category</label>
+                        <select
+                          name="category"
+                          value={expenseForm.category}
+                          onChange={handleExpenseChange}
+                          style={styles.input}
+                        >
+                          <option value="Food">Food</option>
+                          <option value="Transport">Transport</option>
+                          <option value="Accommodation">Accommodation</option>
+                          <option value="Entertainment">Entertainment</option>
+                          <option value="Shopping">Shopping</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div style={styles.formRow}>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Date</label>
+                        <input
+                          type="date"
+                          name="date"
+                          value={expenseForm.date}
+                          onChange={handleExpenseChange}
+                          style={styles.input}
+                        />
+                      </div>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>Split Type *</label>
+                        <select
+                          value={expenseForm.splitType}
+                          onChange={handleSplitTypeChange}
+                          style={styles.input}
+                        >
+                          <option value="equal">Equal Split</option>
+                          <option value="unequal">Unequal (Custom Amounts)</option>
+                          <option value="percentage">Percentage Split</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    {expenseForm.splitType === 'equal' && expenseForm.amount && (
+                      <div style={styles.splitInfo}>
+                        💡 Split equally: ₹{(parseFloat(expenseForm.amount) / group.members.length).toFixed(2)} per person
+                      </div>
+                    )}
+
+                    {expenseForm.splitType === 'unequal' && customSplits.length > 0 && (
+                      <div style={styles.customSplitSection}>
+                        <div style={styles.splitHeader}>
+                          <label style={styles.label}>Custom Amounts</label>
+                          <div style={styles.remainingAmount}>
+                            Remaining: ₹{calculateRemainingAmount()}
+                          </div>
+                        </div>
+                        {customSplits.map(split => (
+                          <div key={split.userId} style={styles.splitRow}>
+                            <span style={styles.splitName}>{split.name}</span>
+                            <input
+                              type="number"
+                              placeholder="0.00"
+                              value={split.amount}
+                              onChange={(e) => handleCustomSplitChange(split.userId, 'amount', e.target.value)}
+                              min="0"
+                              step="0.01"
+                              style={styles.splitInput}
+                            />
+                          </div>
+                        ))}
+                        <small style={styles.helpText}>
+                          ⚠️ Total must equal ₹{expenseForm.amount || '0.00'}
+                        </small>
+                      </div>
+                    )}
+
+                    {expenseForm.splitType === 'percentage' && customSplits.length > 0 && (
+                      <div style={styles.customSplitSection}>
+                        <div style={styles.splitHeader}>
+                          <label style={styles.label}>Split by Percentage</label>
+                          <div style={styles.remainingAmount}>
+                            Remaining: {calculateRemainingPercentage()}%
+                          </div>
+                        </div>
+                        {customSplits.map(split => (
+                          <div key={split.userId} style={styles.splitRow}>
+                            <span style={styles.splitName}>{split.name}</span>
+                            <div style={styles.percentageInput}>
+                              <input
+                                type="number"
+                                placeholder="0"
+                                value={split.percentage}
+                                onChange={(e) => handleCustomSplitChange(split.userId, 'percentage', e.target.value)}
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                style={styles.splitInput}
+                              />
+                              <span style={styles.percentSymbol}>%</span>
+                              {expenseForm.amount && (
+                                <span style={styles.amountPreview}>
+                                  = ₹{((parseFloat(expenseForm.amount) * parseFloat(split.percentage || 0)) / 100).toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        <small style={styles.helpText}>
+                          ⚠️ Total must equal 100%
+                        </small>
+                      </div>
+                    )}
+
+                    <button type="submit" style={styles.submitBtn}>
+                      Add Expense
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Expenses List */}
+{expenses.length === 0 ? (
+  <div style={styles.emptyState}>
+    <p>No expenses yet. Add your first expense to get started!</p>
   </div>
-)}
-
-{/* Settlement Recording Section */}
-{balances && balances.transactions && balances.transactions.length > 0 && (
-  <div style={styles.section}>
-    <div style={styles.sectionHeader}>
-      <h3 style={styles.sectionTitle}>Record Settlement</h3>
-      <button 
-        onClick={() => setShowRecordSettlement(!showRecordSettlement)} 
-        style={styles.addBtn}
-      >
-        {showRecordSettlement ? 'Cancel' : '💰 Settle Up'}
-      </button>
-    </div>
-
-    {showRecordSettlement && (
-      <div style={styles.addForm}>
-        {error && <div style={styles.errorBox}>{error}</div>}
-        <form onSubmit={handleRecordSettlement}>
-          <div style={styles.formRow}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Who Paid? *</label>
-              <select
-                name="paidBy"
-                value={settlementForm.paidBy}
-                onChange={handleSettlementChange}
-                required
-                style={styles.input}
-              >
-                <option value="">Select person</option>
-                {group.members.map(member => (
-                  <option key={member._id} value={member._id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Paid To? *</label>
-              <select
-                name="paidTo"
-                value={settlementForm.paidTo}
-                onChange={handleSettlementChange}
-                required
-                style={styles.input}
-              >
-                <option value="">Select person</option>
-                {group.members.map(member => (
-                  <option key={member._id} value={member._id}>
-                    {member.name}
-                  </option>
-                ))}
-              </select>
+) : (
+  <div style={styles.expensesList}>
+    {expenses.map((expense) => (
+      <div key={expense._id} style={styles.expenseCard}>
+        {/* Header */}
+        <div style={styles.expenseHeader}>
+          <div>
+            <h4 style={styles.expenseDescription}>{expense.description}</h4>
+            <div style={styles.expenseMeta}>
+              <span style={styles.expenseCategory}>{expense.category}</span>
+              <span style={styles.expenseDate}>
+                {new Date(expense.date).toLocaleDateString()}
+              </span>
             </div>
           </div>
 
-          <div style={styles.formRow}>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Amount (₹) *</label>
-              <input
-                type="number"
-                name="amount"
-                placeholder="0.00"
-                value={settlementForm.amount}
-                onChange={handleSettlementChange}
-                required
-                min="0.01"
-                step="0.01"
-                style={styles.input}
-              />
-            </div>
-            <div style={styles.formGroup}>
-              <label style={styles.label}>Note (Optional)</label>
-              <input
-                type="text"
-                name="note"
-                placeholder="e.g., Paid via UPI"
-                value={settlementForm.note}
-                onChange={handleSettlementChange}
-                style={styles.input}
-              />
+          <div style={styles.expenseRight}>
+            <div style={styles.expenseAmount}>₹{expense.amount.toFixed(2)}</div>
+            <div style={styles.expensePaidBy}>
+              Paid by {expense.paidBy?.name || "Unknown"}
             </div>
           </div>
+        </div>
 
-          <button type="submit" style={styles.submitBtn}>
-            Record Settlement
-          </button>
-        </form>
+        {/* Split Details */}
+        <div style={styles.expenseSplit}>
+          <div style={styles.splitLabel}>
+            {expense.splitType === "equal" && "Split equally:"}
+            {expense.splitType === "unequal" && "Custom split:"}
+            {expense.splitType === "percentage" && "Percentage split:"}
+          </div>
+
+          <div style={styles.splitDetails}>
+            {expense.splitDetails?.map((split) => (
+              <span key={split.userId._id} style={styles.splitItem}>
+                {split.userId.name}: ₹{split.amount.toFixed(2)}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Delete Button (Only for Creator/Admin) */}
+        {(() => {
+          const expenseCreatorId = expense.createdBy?._id || expense.createdBy?.id;
+          const currentUserId = user?.id || user?._id;
+          const canDelete =
+            expenseCreatorId?.toString() === currentUserId?.toString() || isAdmin;
+
+          return (
+            canDelete && (
+              <button
+                onClick={() => handleDeleteExpense(expense._id)}
+                style={styles.deleteExpenseBtn}
+              >
+                Delete
+              </button>
+            )
+          );
+        })()}
       </div>
-    )}
-
-    {/* Quick Settlement Buttons */}
-{balances.simplifiedTransactions && balances.simplifiedTransactions.length > 0 && !showRecordSettlement &&(
-  <div style={styles.quickSettlements}>
-    <p style={styles.quickSettleLabel}>💡 Quick Settle (Optimized):</p>
-    {balances.transactions.map((transaction, index) => (
-      <button
-        key={index}
-        onClick={() => {
-          setSettlementForm({
-            paidBy: transaction.from.userId.toString(),
-            paidTo: transaction.to.userId.toString(),
-            amount: transaction.amount.toFixed(2),
-            note: 'Quick settlement'
-          });
-          setShowRecordSettlement(true);
-        }}
-        style={styles.quickSettleBtn}
-      >
-        💰 {transaction.from.name} pays {transaction.to.name} ₹{transaction.amount.toFixed(2)}
-      </button>
     ))}
   </div>
 )}
-  </div>
-)}
 
-{/* Settlement History */}
-{settlements.length > 0 && (
-  <div style={styles.section}>
-    <h3 style={styles.sectionTitle}>Settlement History ({settlements.length})</h3>
-    <div style={styles.settlementsList}>
-      {settlements.map(settlement => (
-        <div key={settlement._id} style={styles.settlementCard}>
-          <div style={styles.settlementHeader}>
-            <div>
-              <div style={styles.settlementTransaction}>
-                <span style={styles.settlementPaidBy}>{settlement.paidBy.name}</span>
-                <span style={styles.settlementArrow}>→</span>
-                <span style={styles.settlementPaidTo}>{settlement.paidTo.name}</span>
-              </div>
-              <div style={styles.settlementMeta}>
-                <span style={styles.settlementDate}>
-                  {new Date(settlement.date).toLocaleDateString()}
-                </span>
-                {settlement.note && (
-                  <span style={styles.settlementNote}>"{settlement.note}"</span>
-                )}
-              </div>
+</>
+          )}
+
+
+
+      {/* ANALYTICS TAB */}
+      {activeTab === 'analytics' && (
+        <ExpenseAnalytics expenses={expenses} groupMembers={group.members} />
+      )}
+    </div>
+
+    {/* Members Section */}
+    <div style={styles.section}>
+      <div style={styles.sectionHeader}>
+        <h3 style={styles.sectionTitle}>
+          👥 Members ({group.members.length})
+        </h3>
+        {group.members.some(m => 
+          (m._id || m.id)?.toString() === (user?.id || user?._id)?.toString()
+        ) && (
+          <button 
+            onClick={() => {
+              setShowAddMember(!showAddMember);
+              setError('');
+            }} 
+            style={styles.addBtn}
+          >
+            {showAddMember ? '✕ Cancel' : '+ Add Member'}
+          </button>
+        )}
+      </div>
+
+      {showAddMember && (
+        <div style={styles.addMemberForm}>
+          <h4 style={styles.addMemberTitle}>Add New Member</h4>
+          {error && <div style={styles.errorBox}>{error}</div>}
+          <form onSubmit={handleAddMember} style={styles.addMemberFormInner}>
+            <div style={styles.addMemberInputGroup}>
+              <input
+                type="email"
+                placeholder="Enter member's email address"
+                value={memberEmail}
+                onChange={(e) => setMemberEmail(e.target.value)}
+                required
+                style={styles.addMemberInput}
+                autoFocus
+              />
+              <button type="submit" style={styles.addMemberSubmitBtn}>
+                Add Member
+              </button>
             </div>
-            <div style={styles.settlementRight}>
-              <div style={styles.settlementAmount}>₹{settlement.amount.toFixed(2)}</div>
-              {(settlement.createdBy._id === (user?.id || user?._id) || isAdmin) && (
+            <small style={styles.helpText}>
+              💡 The person must have a SettleUp account with this email
+            </small>
+          </form>
+        </div>
+      )}
+
+      <div style={styles.membersList}>
+        {group.members.map(member => {
+          const memberId = (member._id || member.id)?.toString();
+          const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
+          const currentUserId = (user?.id || user?._id)?.toString();
+
+          const isCreator = memberId === creatorId;
+          const isCurrentUser = memberId === currentUserId;
+          const canRemove = isAdmin && !isCreator;
+
+          return (
+            <div key={member._id} style={styles.memberCard}>
+              <div style={styles.memberInfo}>
+                <div style={styles.memberAvatar}>
+                  {member.name.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div style={styles.memberName}>
+                    {member.name}
+                    {isCreator && (
+                      <span style={styles.adminBadge}>ADMIN</span>
+                    )}
+                    {isCurrentUser && (
+                      <span style={styles.youBadge}>YOU</span>
+                    )}
+                  </div>
+                  <div style={styles.memberEmail}>{member.email}</div>
+                </div>
+              </div>
+              {canRemove && (
                 <button
-                  onClick={() => handleDeleteSettlement(settlement._id)}
-                  style={styles.deleteSettlementBtn}
+                  onClick={() => handleRemoveMember(member._id)}
+                  style={styles.removeBtn}
                 >
-                  Delete
+                  Remove
                 </button>
               )}
             </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  </div>
-)}
-      {/* Members Section */}
-<div style={styles.section}>
-  <div style={styles.sectionHeader}>
-    <h3 style={styles.sectionTitle}>
-      👥 Members ({group.members.length})
-    </h3>
-    {/* Only members can add new members */}
-    {group.members.some(m => 
-      (m._id || m.id)?.toString() === (user?.id || user?._id)?.toString()
-    ) && (
-      <button 
-        onClick={() => {
-          setShowAddMember(!showAddMember);
-          setError('');
-        }} 
-        style={styles.addBtn}
-      >
-        {showAddMember ? '✕ Cancel' : '+ Add Member'}
-      </button>
-    )}
-  </div>
-
-  {/* Add Member Form */}
-  {showAddMember && (
-    <div style={styles.addMemberForm}>
-      <h4 style={styles.addMemberTitle}>Add New Member</h4>
-      {error && <div style={styles.errorBox}>{error}</div>}
-      <form onSubmit={handleAddMember} style={styles.addMemberFormInner}>
-        <div style={styles.addMemberInputGroup}>
-          <input
-            type="email"
-            placeholder="Enter member's email address"
-            value={memberEmail}
-            onChange={(e) => setMemberEmail(e.target.value)}
-            required
-            style={styles.addMemberInput}
-            autoFocus
-          />
-          <button type="submit" style={styles.addMemberSubmitBtn}>
-            Add Member
-          </button>
-        </div>
-        <small style={styles.helpText}>
-          💡 The person must have a SettleUp account with this email
-        </small>
-      </form>
-    </div>
-  )}
-
-  {/* Members List */}
-  <div style={styles.membersList}>
-    {group.members.map(member => {
-      // Safely extract IDs
-      const memberId = (member._id || member.id)?.toString();
-      const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
-      const currentUserId = (user?.id || user?._id)?.toString();
-
-      // Determine badges and permissions
-      const isCreator = memberId === creatorId;
-      const isCurrentUser = memberId === currentUserId;
-      const canRemove = isAdmin && !isCreator;
-
-      return (
-        <div key={member._id} style={styles.memberCard}>
-          <div style={styles.memberInfo}>
-            <div style={styles.memberAvatar}>
-              {member.name.charAt(0).toUpperCase()}
-            </div>
-            <div>
-              <div style={styles.memberName}>
-                {member.name}
-                {isCreator && (
-                  <span style={styles.adminBadge}>ADMIN</span>
-                )}
-                {isCurrentUser && (
-                  <span style={styles.youBadge}>YOU</span>
-                )}
-              </div>
-              <div style={styles.memberEmail}>{member.email}</div>
-            </div>
-          </div>
-          {canRemove && (
-            <button
-              onClick={() => handleRemoveMember(member._id)}
-              style={styles.removeBtn}
-            >
-              Remove
-            </button>
-          )}
-        </div>
-      );
-    })}
-  </div>
-</div>
-          
-        </div>
+          );
+        })}
       </div>
     </div>
+  </div>
+</div>    
   );
 }
 
 const styles = {
-  // Update/add these styles
-addMemberForm: {
-  marginBottom: '24px',
-  padding: '24px',
-  backgroundColor: '#f0f8ff',
-  borderRadius: '8px',
-  border: '2px dashed #1cc29f'
-},
-addMemberTitle: {
-  margin: '0 0 16px 0',
+  container: {
+  minHeight: '100vh',
+  backgroundColor: '#f5f5f5'
+  },
+  header: {
+  backgroundColor: 'white',
+  padding: '20px 40px',
+  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center'
+  },
+  title: {
+  margin: 0,
+  fontSize: '24px',
+  color: '#1cc29f',
+  fontWeight: '700'
+  },
+  userName: {
   fontSize: '16px',
   color: '#333',
-  fontWeight: '600'
-},
-addMemberFormInner: {
+  fontWeight: '500'
+  },
+  content: {
+  padding: '40px',
+  maxWidth: '1000px',
+  margin: '0 auto'
+  },
+  backLink: {
+  marginBottom: '20px'
+  },
+  link: {
+  color: '#1cc29f',
+  textDecoration: 'none',
+  fontSize: '16px',
+  fontWeight: '500'
+  },
+  groupHeader: {
+  backgroundColor: 'white',
+  padding: '30px',
+  borderRadius: '8px',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  marginBottom: '20px',
   display: 'flex',
-  flexDirection: 'column',
-  gap: '12px'
-},
-addMemberInputGroup: {
+  justifyContent: 'space-between',
+  alignItems: 'flex-start'
+  },
+  groupName: {
+  margin: '0 0 10px 0',
+  fontSize: '32px',
+  color: '#333'
+  },
+  groupDescription: {
+  margin: 0,
+  fontSize: '16px',
+  color: '#666'
+  },
+  deleteBtn: {
+  padding: '10px 20px',
+  backgroundColor: '#dc3545',
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '14px',
+  fontWeight: '500'
+  },
+  balanceCard: {
+  backgroundColor: 'white',
+  padding: '24px',
+  borderRadius: '8px',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  marginBottom: '20px',
+  textAlign: 'center'
+  },
+  balanceTitle: {
+  margin: '0 0 16px 0',
+  fontSize: '18px',
+  color: '#666',
+  fontWeight: '500'
+  },
+  balanceAmount: {
+  fontSize: '32px',
+  fontWeight: '700',
+  marginBottom: '16px'
+  },
+  settled: {
+  color: '#28a745'
+  },
+  owed: {
+  color: '#28a745'
+  },
+  owes: {
+  color: '#dc3545'
+  },
+  balanceDetails: {
   display: 'flex',
-  gap: '12px'
-},
-addMemberInput: {
-  flex: 1,
-  padding: '12px 16px',
-  border: '2px solid #1cc29f',
-  borderRadius: '6px',
-  fontSize: '15px',
-  outline: 'none',
-  transition: 'border-color 0.3s'
-},
-addMemberSubmitBtn: {
-  padding: '12px 24px',
+  justifyContent: 'center',
+  gap: '40px',
+  fontSize: '14px',
+  color: '#666'
+  },
+  section: {
+  backgroundColor: 'white',
+  padding: '30px',
+  borderRadius: '8px',
+  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+  marginBottom: '20px'
+  },
+  sectionHeader: {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '20px'
+  },
+  sectionTitle: {
+  margin: 0,
+  fontSize: '20px',
+  color: '#333'
+  },
+  addBtn: {
+  padding: '8px 16px',
   backgroundColor: '#1cc29f',
   color: 'white',
   border: 'none',
-  borderRadius: '6px',
-  cursor: 'pointer',
-  fontSize: '15px',
-  fontWeight: '600',
-  whiteSpace: 'nowrap',
-  transition: 'background-color 0.3s'
-},
-memberAvatar: {
-  width: '48px',
-  height: '48px',
-  borderRadius: '50%',
-  backgroundColor: '#1cc29f',
-  color: 'white',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: '20px',
-  fontWeight: '700',
-  marginRight: '16px'
-},
-youBadge: {
-  fontSize: '11px',
-  backgroundColor: '#6c757d',
-  color: 'white',
-  padding: '4px 8px',
   borderRadius: '4px',
-  fontWeight: '600',
-  marginLeft: '8px'
-},
-simplificationBanner: {
+  cursor: 'pointer',
+  fontSize: '14px',
+  fontWeight: '500'
+  },
+  simplificationBanner: {
   display: 'flex',
   alignItems: 'flex-start',
   gap: '16px',
@@ -960,25 +1105,25 @@ simplificationBanner: {
   border: '2px solid #4caf50',
   borderRadius: '8px',
   marginBottom: '24px'
-},
-bannerIcon: {
+  },
+  bannerIcon: {
   fontSize: '32px'
-},
-bannerContent: {
+  },
+  bannerContent: {
   flex: 1
-},
-bannerTitle: {
+  },
+  bannerTitle: {
   fontSize: '18px',
   fontWeight: '700',
   color: '#2e7d32',
   marginBottom: '8px'
-},
-bannerText: {
+  },
+  bannerText: {
   fontSize: '14px',
   color: '#1b5e20',
   lineHeight: '1.6'
-},
-bannerHighlight: {
+  },
+  bannerHighlight: {
   display: 'inline-block',
   marginTop: '8px',
   padding: '4px 8px',
@@ -987,505 +1132,191 @@ bannerHighlight: {
   borderRadius: '4px',
   fontSize: '13px',
   fontWeight: '600'
-},
-transactionsContainer: {
+  },
+  transactionsContainer: {
   marginBottom: '20px'
-},
-transactionsHeader: {
+  },
+  transactionsHeader: {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
   marginBottom: '16px'
-},
-transactionsTitle: {
+  },
+  transactionsTitle: {
   margin: 0,
   fontSize: '16px',
   color: '#333',
   fontWeight: '600'
-},
-transactionsBadge: {
+  },
+  transactionsBadge: {
   padding: '6px 12px',
   backgroundColor: '#1cc29f',
   color: 'white',
   borderRadius: '12px',
   fontSize: '13px',
   fontWeight: '600'
-},
-detailsContainer: {
-  marginTop: '20px',
+  },
+  transactionsList: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+  },
+  transactionCard: {
+  display: 'flex',
+  alignItems: 'center',
+  padding: '16px',
+  backgroundColor: '#f8f9fa',
+  borderRadius: '6px',
+  gap: '12px'
+  },
+  transactionFrom: {
+  fontWeight: '600',
+  color: '#333',
+  flex: 1
+  },
+  transactionArrow: {
+  color: '#1cc29f',
+  fontSize: '20px',
+  fontWeight: '700'
+  },
+  transactionTo: {
+  fontWeight: '600',
+  color: '#333',
+  flex: 1
+  },
+  transactionAmount: {
+  fontWeight: '700',
+  color: '#1cc29f',
+  fontSize: '18px'
+  },
+  addForm: {
+  marginBottom: '24px',
+  padding: '24px',
+  backgroundColor: '#f8f9fa',
+  borderRadius: '6px'
+  },
+  formRow: {
+  display: 'grid',
+  gridTemplateColumns: '1fr 1fr',
+  gap: '16px',
+  marginBottom: '16px'
+  },
+  formGroup: {
+  display: 'flex',
+  flexDirection: 'column'
+  },
+  label: {
+  marginBottom: '6px',
+  fontSize: '14px',
+  fontWeight: '600',
+  color: '#333'
+  },
+  input: {
+  padding: '10px',
+  border: '1px solid #ddd',
+  borderRadius: '4px',
+  fontSize: '14px'
+  },
+  helpText: {
+  marginTop: '4px',
+  fontSize: '12px',
+  color: '#666'
+  },
+  submitBtn: {
+  width: '100%',
+  padding: '12px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '16px',
+  fontWeight: '600',
+  marginTop: '8px'
+  },
+  errorBox: {
+  padding: '10px',
+  backgroundColor: '#fee',
+  color: '#c33',
+  borderRadius: '4px',
+  marginBottom: '16px',
+  fontSize: '14px',
+  border: '1px solid #fcc'
+  },
+  splitInfo: {
+  padding: '12px',
+  backgroundColor: '#e8f5e9',
+  borderRadius: '4px',
+  fontSize: '14px',
+  color: '#2e7d32',
+  marginBottom: '16px',
+  textAlign: 'center'
+  },
+  customSplitSection: {
+  marginBottom: '20px',
   padding: '16px',
   backgroundColor: '#f8f9fa',
   borderRadius: '6px',
   border: '1px solid #dee2e6'
-},
-detailsSummary: {
-  cursor: 'pointer',
-  fontWeight: '600',
-  color: '#666',
-  fontSize: '14px',
-  padding: '8px',
-  userSelect: 'none'
-},
-  container: {
-    minHeight: '100vh',
-    backgroundColor: '#f5f5f5'
-  },
-  header: {
-    backgroundColor: 'white',
-    padding: '20px 40px',
-    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center'
-  },
-  title: {
-    margin: 0,
-    fontSize: '24px',
-    color: '#1cc29f',
-    fontWeight: '700'
-  },
-  userName: {
-    fontSize: '16px',
-    color: '#333',
-    fontWeight: '500'
-  },
-  content: {
-    padding: '40px',
-    maxWidth: '1000px',
-    margin: '0 auto'
-  },
-  backLink: {
-    marginBottom: '20px'
-  },
-  link: {
-    color: '#1cc29f',
-    textDecoration: 'none',
-    fontSize: '16px',
-    fontWeight: '500'
-  },
-  groupHeader: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    marginBottom: '20px',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start'
-  },
-  groupName: {
-    margin: '0 0 10px 0',
-    fontSize: '32px',
-    color: '#333'
-  },
-  groupDescription: {
-    margin: 0,
-    fontSize: '16px',
-    color: '#666'
-  },
-  deleteBtn: {
-    padding: '10px 20px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500'
-  },
-  balanceCard: {
-    backgroundColor: 'white',
-    padding: '24px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    marginBottom: '20px',
-    textAlign: 'center'
-  },
-  balanceTitle: {
-    margin: '0 0 16px 0',
-    fontSize: '18px',
-    color: '#666',
-    fontWeight: '500'
-  },
-  balanceAmount: {
-    fontSize: '32px',
-    fontWeight: '700',
-    marginBottom: '16px'
-  },
-  settled: {
-    color: '#28a745'
-  },
-  owed: {
-    color: '#28a745'
-  },
-  owes: {
-    color: '#dc3545'
-  },
-  balanceDetails: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '40px',
-    fontSize: '14px',
-    color: '#666'
-  },
-  section: {
-    backgroundColor: 'white',
-    padding: '30px',
-    borderRadius: '8px',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-    marginBottom: '20px'
-  },
-  sectionHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '20px'
-  },
-  sectionTitle: {
-    margin: 0,
-    fontSize: '20px',
-    color: '#333'
-  },
-  addBtn: {
-    padding: '8px 16px',
-    backgroundColor: '#1cc29f',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500'
-  },
-  transactionsList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px'
-  },
-  transactionCard: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '16px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px',
-    gap: '12px'
-  },
-  transactionFrom: {
-    fontWeight: '600',
-    color: '#333',
-    flex: 1
-  },
-  transactionArrow: {
-    color: '#1cc29f',
-    fontSize: '20px',
-    fontWeight: '700'
-  },
-  transactionTo: {
-    fontWeight: '600',
-    color: '#333',
-    flex: 1
-  },
-  transactionAmount: {
-    fontWeight: '700',
-    color: '#1cc29f',
-    fontSize: '18px'
-  },
-  addForm: {
-    marginBottom: '24px',
-    padding: '24px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px'
-  },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '16px',
-    marginBottom: '16px'
-  },
-  formGroup: {
-    display: 'flex',
-    flexDirection: 'column'
-  },
-  label: {
-    marginBottom: '6px',
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  input: {
-    padding: '10px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px'
-  },
-  helpText: {
-    marginTop: '4px',
-    fontSize: '12px',
-    color: '#666'
-  },
-  submitBtn: {
-    width: '100%',
-    padding: '12px',
-    backgroundColor: '#1cc29f',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '16px',
-    fontWeight: '600',
-    marginTop: '8px'
-  },
-  errorBox: {
-    padding: '10px',
-    backgroundColor: '#fee',
-    color: '#c33',
-    borderRadius: '4px',
-    marginBottom: '16px',
-    fontSize: '14px',
-    border: '1px solid #fcc'
-  },
-  emptyState: {
-    padding: '40px',
-    textAlign: 'center',
-    color: '#666'
-  },
-  expensesList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px'
-  },
-  expenseCard: {
-    padding: '20px',
-    border: '1px solid #eee',
-    borderRadius: '8px',
-    backgroundColor: '#fafafa'
-  },
-  expenseHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: '12px'
-  },
-  expenseDescription: {
-    margin: '0 0 8px 0',
-    fontSize: '18px',
-    fontWeight: '600',
-    color: '#333'
-  },
-  expenseMeta: {
-    display: 'flex',
-    gap: '12px',
-    fontSize: '13px'
-  },
-  expenseCategory: {
-    padding: '4px 10px',
-    backgroundColor: '#1cc29f',
-    color: 'white',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontWeight: '500'
-  },
-  expenseDate: {
-    color: '#666'
-  },
-  expenseRight: {
-    textAlign: 'right'
-  },
-  expenseAmount: {
-    fontSize: '24px',
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: '4px'
-  },
-  expensePaidBy: {
-    fontSize: '13px',
-    color: '#666'
-  },
-  expenseSplit: {
-    marginTop: '12px',
-    paddingTop: '12px',
-    borderTop: '1px solid #ddd'
-  },
-  splitLabel: {
-    fontSize: '13px',
-    color: '#666',
-    marginBottom: '8px',
-    fontWeight: '500'
-  },
-  splitDetails: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '12px'
-  },
-  splitItem: {
-    fontSize: '13px',
-    padding: '6px 12px',
-    backgroundColor: 'white',
-    borderRadius: '4px',
-    border: '1px solid #ddd'
-  },
-  deleteExpenseBtn: {
-    marginTop: '12px',
-    padding: '6px 14px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500'
-  },
-  addMemberForm: {
-    marginBottom: '20px',
-    padding: '20px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px'
-  },
-  form: {
-    display: 'flex',
-    gap: '10px'
-  },
-  membersList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px'
-  },
-  memberCard: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: '16px',
-    border: '1px solid #eee',
-    borderRadius: '6px',
-    backgroundColor: '#fafafa'
-  },
-  memberInfo: {
-    display: 'flex',
-    flex: 1
-  },
-  memberName: {
-    fontSize: '16px',
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px'
-  },
-  memberEmail: {
-    fontSize: '14px',
-    color: '#666'
-  },
-  adminBadge: {
-    fontSize: '10px',
-    backgroundColor: '#1cc29f',
-    color: 'white',
-    padding: '4px 8px',
-    borderRadius: '4px',
-    fontWeight: '600'
-  },
-  removeBtn: {
-    padding: '6px 14px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    fontWeight: '500'
-  },
-  loadingContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f5f5f5'
-  },
-  spinner: {
-    width: '50px',
-    height: '50px',
-    border: '5px solid #f3f3f3',
-    borderTop: '5px solid #1cc29f',
-    borderRadius: '50%',
-    animation: 'spin 1s linear infinite'
-  },
-
-  // Add these to the existing styles object
-splitInfo: {
-    padding: '12px',
-    backgroundColor: '#e8f5e9',
-    borderRadius: '4px',
-    fontSize: '14px',
-    color: '#2e7d32',
-    marginBottom: '16px',
-    textAlign: 'center'
-  },
-  customSplitSection: {
-    marginBottom: '20px',
-    padding: '16px',
-    backgroundColor: '#f8f9fa',
-    borderRadius: '6px',
-    border: '1px solid #dee2e6'
   },
   splitHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: '16px'
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  marginBottom: '16px'
   },
   remainingAmount: {
-    fontSize: '14px',
-    fontWeight: '600',
-    color: '#1cc29f',
-    padding: '6px 12px',
-    backgroundColor: 'white',
-    borderRadius: '4px',
-    border: '1px solid #1cc29f'
+  fontSize: '14px',
+  fontWeight: '600',
+  color: '#1cc29f',
+  padding: '6px 12px',
+  backgroundColor: 'white',
+  borderRadius: '4px',
+  border: '1px solid #1cc29f'
   },
   splitRow: {
-    display: 'flex',
-    alignItems: 'center',
-    marginBottom: '12px',
-    gap: '12px'
+  display: 'flex',
+  alignItems: 'center',
+  marginBottom: '12px',
+  gap: '12px'
   },
   splitName: {
-    flex: '0 0 150px',
-    fontWeight: '500',
-    color: '#333'
+  flex: '0 0 150px',
+  fontWeight: '500',
+  color: '#333'
   },
   splitInput: {
-    flex: 1,
-    padding: '8px',
-    border: '1px solid #ddd',
-    borderRadius: '4px',
-    fontSize: '14px'
+  flex: 1,
+  padding: '8px',
+  border: '1px solid #ddd',
+  borderRadius: '4px',
+  fontSize: '14px'
   },
   percentageInput: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px'
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center',
+  gap: '8px'
   },
   percentSymbol: {
-    fontWeight: '600',
-    color: '#666'
+  fontWeight: '600',
+  color: '#666'
   },
   amountPreview: {
-    fontSize: '13px',
-    color: '#666',
-    fontStyle: 'italic'
+  fontSize: '13px',
+  color: '#666',
+  fontStyle: 'italic'
   },
-  // Add these to existing styles object
-quickSettlements: {
+  quickSettlements: {
   marginTop: '20px'
-},
-quickSettleLabel: {
+  },
+  quickSettleLabel: {
   fontSize: '14px',
   color: '#666',
   marginBottom: '12px',
   fontWeight: '500'
-},
-quickSettleBtn: {
+  },
+  quickSettleBtn: {
   display: 'block',
   width: '100%',
   padding: '14px',
@@ -1498,66 +1329,66 @@ quickSettleBtn: {
   marginBottom: '10px',
   fontSize: '15px',
   transition: 'all 0.3s'
-},
-settlementsList: {
+  },
+  settlementsList: {
   display: 'flex',
   flexDirection: 'column',
   gap: '12px'
-},
-settlementCard: {
+  },
+  settlementCard: {
   padding: '20px',
   border: '1px solid #e8f5e9',
   borderRadius: '8px',
   backgroundColor: '#f1f8f4'
-},
-settlementHeader: {
+  },
+  settlementHeader: {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center'
-},
-settlementTransaction: {
+  },
+  settlementTransaction: {
   display: 'flex',
   alignItems: 'center',
   gap: '12px',
   marginBottom: '8px'
-},
-settlementPaidBy: {
+  },
+  settlementPaidBy: {
   fontWeight: '600',
   color: '#333',
   fontSize: '16px'
-},
-settlementArrow: {
+  },
+  settlementArrow: {
   color: '#28a745',
   fontSize: '20px',
   fontWeight: '700'
-},
-settlementPaidTo: {
+  },
+  settlementPaidTo: {
   fontWeight: '600',
   color: '#333',
   fontSize: '16px'
-},
-settlementMeta: {
+  },
+  settlementMeta: {
   display: 'flex',
   gap: '12px',
   fontSize: '13px'
-},
-settlementDate: {
+  },
+  settlementDate: {
   color: '#666'
-},
-settlementNote: {
+  },
+  settlementNote: {
   color: '#1cc29f',
   fontStyle: 'italic'
-},
-settlementRight: {
+  },
+  settlementRight: {
   textAlign: 'right'
-},
-settlementAmount: {
+  },
+  settlementAmount: {
   fontSize: '24px',
   fontWeight: '700',
   color: '#28a745',
   marginBottom: '8px'
-},
-deleteSettlementBtn: {
+  },
+  deleteSettlementBtn: {
   padding: '6px 14px',
   backgroundColor: '#dc3545',
   color: 'white',
@@ -1566,9 +1397,250 @@ deleteSettlementBtn: {
   cursor: 'pointer',
   fontSize: '13px',
   fontWeight: '500'
-}
-
-  
-};
-
-export default GroupDetail;
+  },
+  // NEW STYLES FOR TABS
+  tabContainer: {
+  display: 'flex',
+  gap: '8px',
+  marginBottom: '24px',
+  borderBottom: '2px solid #e9ecef',
+  paddingBottom: '0'
+  },
+  tab: {
+  padding: '12px 24px',
+  backgroundColor: 'transparent',
+  border: 'none',
+  borderBottom: '3px solid transparent',
+  cursor: 'pointer',
+  fontSize: '15px',
+  fontWeight: '500',
+  color: '#666',
+  transition: 'all 0.3s',
+  marginBottom: '-2px'
+  },
+  tabActive: {
+  color: '#1cc29f',
+  borderBottomColor: '#1cc29f',
+  fontWeight: '600'
+  },
+  emptyState: {
+  padding: '40px',
+  textAlign: 'center',
+  color: '#666'
+  },
+  expensesList: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '16px'
+  },
+  expenseCard: {
+  padding: '20px',
+  border: '1px solid #eee',
+  borderRadius: '8px',
+  backgroundColor: '#fafafa'
+  },
+  expenseHeader: {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'flex-start',
+  marginBottom: '12px'
+  },
+  expenseDescription: {
+  margin: '0 0 8px 0',
+  fontSize: '18px',
+  fontWeight: '600',
+  color: '#333'
+  },
+  expenseMeta: {
+  display: 'flex',
+  gap: '12px',
+  fontSize: '13px'
+  },
+  expenseCategory: {
+  padding: '4px 10px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  borderRadius: '12px',
+  fontSize: '12px',
+  fontWeight: '500'
+  },
+  expenseDate: {
+  color: '#666'
+  },
+  expenseRight: {
+  textAlign: 'right'
+  },
+  expenseAmount: {
+  fontSize: '24px',
+  fontWeight: '700',
+  color: '#333',
+  marginBottom: '4px'
+  },
+  expensePaidBy: {
+  fontSize: '13px',
+  color: '#666'
+  },
+  expenseSplit: {
+  marginTop: '12px',
+  paddingTop: '12px',
+  borderTop: '1px solid #ddd'
+  },
+  splitLabel: {
+  fontSize: '13px',
+  color: '#666',
+  marginBottom: '8px',
+  fontWeight: '500'
+  },
+  splitDetails: {
+  display: 'flex',
+  flexWrap: 'wrap',
+  gap: '12px'
+  },
+  splitItem: {
+  fontSize: '13px',
+  padding: '6px 12px',
+  backgroundColor: 'white',
+  borderRadius: '4px',
+  border: '1px solid #ddd'
+  },
+  deleteExpenseBtn: {
+  marginTop: '12px',
+  padding: '6px 14px',
+  backgroundColor: '#dc3545',
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: '500'
+  },
+  addMemberForm: {
+  marginBottom: '24px',
+  padding: '24px',
+  backgroundColor: '#f0f8ff',
+  borderRadius: '8px',
+  border: '2px dashed #1cc29f'
+  },
+  addMemberTitle: {
+  margin: '0 0 16px 0',
+  fontSize: '16px',
+  color: '#333',
+  fontWeight: '600'
+  },
+  addMemberFormInner: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+  },
+  addMemberInputGroup: {
+  display: 'flex',
+  gap: '12px'
+  },
+  addMemberInput: {
+  flex: 1,
+  padding: '12px 16px',
+  border: '2px solid #1cc29f',
+  borderRadius: '6px',
+  fontSize: '15px',
+  outline: 'none'
+  },
+  addMemberSubmitBtn: {
+  padding: '12px 24px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  border: 'none',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '15px',
+  fontWeight: '600',
+  whiteSpace: 'nowrap'
+  },
+  membersList: {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '12px'
+  },
+  memberCard: {
+  display: 'flex',
+  justifyContent: 'space-between',
+  alignItems: 'center',
+  padding: '16px',
+  border: '1px solid #eee',
+  borderRadius: '6px',
+  backgroundColor: '#fafafa'
+  },
+  memberInfo: {
+  flex: 1,
+  display: 'flex',
+  alignItems: 'center'
+  },
+  memberAvatar: {
+  width: '48px',
+  height: '48px',
+  borderRadius: '50%',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: '20px',
+  fontWeight: '700',
+  marginRight: '16px'
+  },
+  memberName: {
+  fontSize: '16px',
+  fontWeight: '600',
+  color: '#333',
+  marginBottom: '4px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: '10px'
+  },
+  memberEmail: {
+  fontSize: '14px',
+  color: '#666'
+  },
+  adminBadge: {
+  fontSize: '11px',
+  backgroundColor: '#1cc29f',
+  color: 'white',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  fontWeight: '600'
+  },
+  youBadge: {
+  fontSize: '11px',
+  backgroundColor: '#6c757d',
+  color: 'white',
+  padding: '4px 8px',
+  borderRadius: '4px',
+  fontWeight: '600'
+  },
+  removeBtn: {
+  padding: '6px 14px',
+  backgroundColor: '#dc3545',
+  color: 'white',
+  border: 'none',
+  borderRadius: '4px',
+  cursor: 'pointer',
+  fontSize: '13px',
+  fontWeight: '500'
+  },
+  loadingContainer: {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: '100vh',
+  backgroundColor: '#f5f5f5'
+  },
+  spinner: {
+  width: '50px',
+  height: '50px',
+  border: '5px solid #f3f3f3',
+  borderTop: '5px solid #1cc29f',
+  borderRadius: '50%',
+  animation: 'spin 1s linear infinite'
+  }
+  };
+  export default GroupDetail;
