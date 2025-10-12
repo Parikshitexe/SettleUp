@@ -1,8 +1,10 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
 import ExpenseAnalytics from '../components/ExpenseAnalytics';
+import Toast from '../components/Toast';
+
 
 function GroupDetail() {
   const { id } = useParams();
@@ -17,7 +19,13 @@ function GroupDetail() {
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [memberEmail, setMemberEmail] = useState('');
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState('expenses'); // NEW: Tab state
+  const [activeTab, setActiveTab] = useState('expenses');
+  const [toast, setToast] = useState(null);
+  
+
+  const showToast = (message, type = 'success') => {
+    setToast({ message, type });
+  };
 
   // Expense form state
   const [expenseForm, setExpenseForm] = useState({
@@ -41,14 +49,14 @@ function GroupDetail() {
     note: ''
   });
 
-  useEffect(() => {
-    fetchGroup();
-    fetchExpenses();
-    fetchBalances();
-    fetchSettlements();
-  }, [id]);
+  const [searchTerm, setSearchTerm] = useState('');
+const [filterCategory, setFilterCategory] = useState('All');
+const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
 
-  const fetchGroup = async () => {
+
+  
+
+  const fetchGroup = useCallback(async () => {
     try {
       const res = await axios.get(`http://localhost:5000/api/groups/${id}`);
       setGroup(res.data);
@@ -59,33 +67,87 @@ function GroupDetail() {
       setError('Failed to load group');
       setLoading(false);
     }
-  };
+  }, [id, user]);
 
-  const fetchExpenses = async () => {
+  const fetchExpenses = useCallback(async () => {
     try {
       const res = await axios.get(`http://localhost:5000/api/expenses/group/${id}`);
       setExpenses(res.data);
     } catch (error) {
       console.error('Fetch expenses error:', error);
     }
-  };
+  }, [id]);
 
-  const fetchBalances = async () => {
+  const fetchBalances = useCallback(async () => {
     try {
       const res = await axios.get(`http://localhost:5000/api/balances/group/${id}`);
       setBalances(res.data);
     } catch (error) {
       console.error('Fetch balances error:', error);
     }
-  };
+  }, [id]);
 
-  const fetchSettlements = async () => {
+  const fetchSettlements = useCallback(async () => {
     try {
       const res = await axios.get(`http://localhost:5000/api/settlements/group/${id}`);
       setSettlements(res.data);
     } catch (error) {
       console.error('Fetch settlements error:', error);
     }
+  }, [id]);
+
+  
+  useEffect(() => {
+    fetchGroup();
+    fetchExpenses();
+    fetchBalances();
+    fetchSettlements();
+  }, [id, fetchGroup, fetchExpenses, fetchBalances, fetchSettlements]);
+
+  const handleExportCSV = () => {
+    if (expenses.length === 0) {
+      showToast('No expenses to export!');
+      return;
+    }
+  
+    // Prepare CSV data
+    const headers = ['Date', 'Description', 'Category', 'Amount', 'Paid By', 'Split Type'];
+    
+    const rows = expenses.map(expense => [
+      new Date(expense.date).toLocaleDateString(),
+      expense.description,
+      expense.category,
+      expense.amount.toFixed(2),
+      expense.paidBy.name,
+      expense.splitType
+    ]);
+  
+    // Create CSV content
+    let csvContent = headers.join(',') + '\n';
+    rows.forEach(row => {
+      csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
+    });
+  
+    // Add summary
+    const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+    csvContent += '\n';
+    csvContent += `Total Expenses,${expenses.length}\n`;
+    csvContent += `Total Amount,${totalAmount.toFixed(2)}\n`;
+    csvContent += `Group Name,"${group.name}"\n`;
+    csvContent += `Exported On,${new Date().toLocaleDateString()}\n`;
+  
+    // Download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', `${group.name.replace(/\s+/g, '_')}_expenses.csv`);
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleAddMember = async (e) => {
@@ -113,7 +175,7 @@ function GroupDetail() {
       const res = await axios.delete(`http://localhost:5000/api/groups/${id}/members/${memberId}`);
       setGroup(res.data);
     } catch (error) {
-      alert(error.response?.data?.msg || 'Failed to remove member');
+      showToast(error.response?.data?.msg || 'Failed to remove member');
     }
   };
 
@@ -126,7 +188,7 @@ function GroupDetail() {
       await axios.delete(`http://localhost:5000/api/groups/${id}`);
       navigate('/dashboard');
     } catch (error) {
-      alert(error.response?.data?.msg || 'Failed to delete group');
+      showToast(error.response?.data?.msg || 'Failed to delete group');
     }
   };
 
@@ -228,10 +290,10 @@ function GroupDetail() {
       await axios.delete(`http://localhost:5000/api/expenses/${expenseId}`);
       await fetchExpenses();
       await fetchBalances();
-      alert('Expense deleted successfully!');
+      showToast('Expense deleted successfully!');
     } catch (error) {
       console.error('Delete expense error:', error);
-      alert(error.response?.data?.msg || 'Failed to delete expense');
+      showToast(error.response?.data?.msg || 'Failed to delete expense');
     }
   };
 
@@ -279,7 +341,7 @@ function GroupDetail() {
       await fetchSettlements();
       await fetchBalances();
       
-      alert('Settlement recorded successfully!');
+      showToast('Settlement recorded successfully!');
     } catch (error) {
       setError(error.response?.data?.msg || 'Failed to record settlement');
     }
@@ -295,7 +357,7 @@ function GroupDetail() {
       await fetchSettlements();
       await fetchBalances();
     } catch (error) {
-      alert(error.response?.data?.msg || 'Failed to delete settlement');
+      showToast(error.response?.data?.msg || 'Failed to delete settlement');
     }
   };
 
@@ -328,6 +390,37 @@ function GroupDetail() {
   const myBalance = balances?.balances?.find(
     b => b.userId.toString() === (user?.id || user?._id).toString()
   );
+
+  // Filter and search expenses
+const getFilteredExpenses = () => {
+  let filtered = [...expenses];
+
+  // Search by description or paid by name
+  if (searchTerm) {
+    filtered = filtered.filter(expense =>
+      expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      expense.paidBy.name.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+  }
+
+  // Filter by category
+  if (filterCategory !== 'All') {
+    filtered = filtered.filter(expense => expense.category === filterCategory);
+  }
+
+  // Sort
+  if (sortBy === 'date') {
+    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+  } else if (sortBy === 'amount') {
+    filtered.sort((a, b) => b.amount - a.amount);
+  } else if (sortBy === 'description') {
+    filtered.sort((a, b) => a.description.localeCompare(b.description));
+  }
+
+  return filtered;
+};
+
+const filteredExpenses = getFilteredExpenses();
 
   return (
     <div style={styles.container}>
@@ -611,12 +704,19 @@ function GroupDetail() {
             <>
               <div style={styles.sectionHeader}>
                 <h3 style={styles.sectionTitle}>Expenses ({expenses.length})</h3>
+                <div style={styles.headerActions}>
+                  <button
+                  onClick={handleExportCSV}
+                  style={styles.exportBtn}
+                  disabled={expenses.length === 0}
+                  > 📥 Export CSV </button>
                 <button 
                   onClick={() => setShowAddExpense(!showAddExpense)} 
                   style={styles.addBtn}
                 >
                   {showAddExpense ? 'Cancel' : '+ Add Expense'}
                 </button>
+              </div>
               </div>
 
               {/* Add Expense Form */}
@@ -791,14 +891,81 @@ function GroupDetail() {
                 </div>
               )}
 
+              {/* Search and Filter */}
+<div style={styles.searchFilterContainer}>
+  <div style={styles.searchBox}>
+    <input
+      type="text"
+      placeholder="🔍 Search expenses..."
+      value={searchTerm}
+      onChange={(e) => setSearchTerm(e.target.value)}
+      style={styles.searchInput}
+    />
+    {searchTerm && (
+      <button
+        onClick={() => setSearchTerm('')}
+        style={styles.clearSearchBtn}
+      >
+        ✕
+      </button>
+    )}
+  </div>
+
+  <div style={styles.filterRow}>
+    <select
+      value={filterCategory}
+      onChange={(e) => setFilterCategory(e.target.value)}
+      style={styles.filterSelect}
+    >
+      <option value="All">All Categories</option>
+      <option value="Food">Food</option>
+      <option value="Transport">Transport</option>
+      <option value="Accommodation">Accommodation</option>
+      <option value="Entertainment">Entertainment</option>
+      <option value="Shopping">Shopping</option>
+      <option value="Other">Other</option>
+    </select>
+
+    <select
+      value={sortBy}
+      onChange={(e) => setSortBy(e.target.value)}
+      style={styles.filterSelect}
+    >
+      <option value="date">Sort by Date</option>
+      <option value="amount">Sort by Amount</option>
+      <option value="description">Sort by Name</option>
+    </select>
+
+    {(searchTerm || filterCategory !== 'All') && (
+      <button
+        onClick={() => {
+          setSearchTerm('');
+          setFilterCategory('All');
+        }}
+        style={styles.clearFiltersBtn}
+      >
+        Clear Filters
+      </button>
+    )}
+  </div>
+
+  <div style={styles.resultsInfo}>
+    Showing {filteredExpenses.length} of {expenses.length} expenses
+  </div>
+</div>
+
               {/* Expenses List */}
-{expenses.length === 0 ? (
+              {expenses.length === 0 ? (
   <div style={styles.emptyState}>
     <p>No expenses yet. Add your first expense to get started!</p>
   </div>
+) : filteredExpenses.length === 0 ? (
+  <div style={styles.emptyState}>
+    <p>No expenses match your filters. Try adjusting your search.</p>
+  </div>
 ) : (
   <div style={styles.expensesList}>
-    {expenses.map((expense) => (
+    {filteredExpenses.map(expense => (
       <div key={expense._id} style={styles.expenseCard}>
         {/* Header */}
         <div style={styles.expenseHeader}>
@@ -960,12 +1127,110 @@ function GroupDetail() {
         })}
       </div>
     </div>
+    {/* Toast Notification */}
+    {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
   </div>
 </div>    
   );
+  
 }
 
 const styles = {
+
+  '@media (max-width: 768px)': {
+  formRow: {
+    gridTemplateColumns: '1fr',
+  },
+  statsGrid: {
+    gridTemplateColumns: '1fr',
+  }
+},
+
+  headerActions: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center'
+  },
+  exportBtn: {
+    padding: '8px 16px',
+    backgroundColor: '#17a2b8',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500',
+    transition: 'background-color 0.3s'
+  },
+  searchFilterContainer: {
+    marginBottom: '24px',
+    padding: '20px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '8px'
+  },
+  searchBox: {
+    position: 'relative',
+    marginBottom: '16px'
+  },
+  searchInput: {
+    width: '100%',
+    padding: '12px 40px 12px 16px',
+    border: '2px solid #ddd',
+    borderRadius: '6px',
+    fontSize: '15px',
+    outline: 'none',
+    transition: 'border-color 0.3s'
+  },
+  clearSearchBtn: {
+    position: 'absolute',
+    right: '12px',
+    top: '50%',
+    transform: 'translateY(-50%)',
+    background: 'none',
+    border: 'none',
+    fontSize: '18px',
+    color: '#999',
+    cursor: 'pointer',
+    padding: '4px 8px'
+  },
+  filterRow: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    flexWrap: 'wrap'
+  },
+  filterSelect: {
+    flex: 1,
+    minWidth: '150px',
+    padding: '10px',
+    border: '1px solid #ddd',
+    borderRadius: '6px',
+    fontSize: '14px',
+    backgroundColor: 'white',
+    cursor: 'pointer'
+  },
+  clearFiltersBtn: {
+    padding: '10px 16px',
+    backgroundColor: '#6c757d',
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
+  },
+  resultsInfo: {
+    marginTop: '12px',
+    fontSize: '13px',
+    color: '#666',
+    fontStyle: 'italic'
+  },
   container: {
   minHeight: '100vh',
   backgroundColor: '#f5f5f5'
@@ -1643,4 +1908,22 @@ const styles = {
   animation: 'spin 1s linear infinite'
   }
   };
+
+// Make styles responsive
+if (window.innerWidth <= 768) {
+  styles.formRow = {
+    ...styles.formRow,
+    gridTemplateColumns: '1fr'
+  };
+  styles.content = {
+    ...styles.content,
+    padding: '20px'
+  };
+  styles.groupHeader = {
+    ...styles.groupHeader,
+    flexDirection: 'column',
+    gap: '16px'
+  };
+}
+
   export default GroupDetail;
