@@ -148,7 +148,8 @@ const styles = {
   container: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '24px'
+    gap: '24px',
+
   },
   emptyState: {
     padding: '60px 20px',
@@ -157,9 +158,14 @@ const styles = {
     fontSize: '16px'
   },
   statsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-    gap: '16px'
+    display: 'flex',
+    //flexDirection: 'column',
+    //alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center',
+    whiteSpace: 'normal',
+    wordWrap: 'break-word',
+
   },
   statCard: {
     display: 'flex',

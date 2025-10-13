@@ -73,18 +73,22 @@ function CreateGroup() {
           )}
 
           <form onSubmit={onSubmit}>
-            <div style={styles.inputGroup}>
-              <label style={styles.label}>Group Name *</label>
-              <input
-                type="text"
-                name="name"
-                placeholder="e.g., Goa Trip 2024, Apartment 301"
-                value={name}
-                onChange={onChange}
-                required
-                style={styles.input}
-              />
-            </div>
+          <div style={styles.inputGroup}>
+  <label style={styles.label}>Group Name *</label>
+  <input
+    type="text"
+    name="name"
+    placeholder="e.g., Goa Trip 2024, Apartment 301"
+    value={formData.name}
+    onChange={onChange}
+    required
+    maxLength="50"
+    style={styles.input}
+  />
+  <small style={styles.helpText}>
+    💡 Choose a unique name (max 50 characters)
+  </small>
+</div>
 
             <div style={styles.inputGroup}>
               <label style={styles.label}>Description (Optional)</label>

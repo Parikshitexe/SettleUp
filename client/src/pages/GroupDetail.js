@@ -193,9 +193,19 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
   };
 
   const handleExpenseChange = (e) => {
-    setExpenseForm({ ...expenseForm, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setExpenseForm({ ...expenseForm, [name]: value });
   };
-
+  
+  const handleAmountBlur = () => {
+    if (expenseForm.amount) {
+      setExpenseForm({
+        ...expenseForm,
+        amount: parseFloat(expenseForm.amount).toFixed(2),
+      });
+    }
+  };
+  
   const handleSplitTypeChange = (e) => {
     const newSplitType = e.target.value;
     setExpenseForm({ ...expenseForm, splitType: newSplitType });
@@ -381,11 +391,14 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     );
   }
 
-  const isAdmin = 
-    group.createdBy._id?.toString() === user?.id?.toString() || 
-    group.createdBy._id?.toString() === user?._id?.toString() ||
-    group.createdBy.id?.toString() === user?.id?.toString() ||
-    group.createdBy.id?.toString() === user?._id?.toString();
+  const isAdmin = (() => {
+    const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
+    const currentUserId = (user?.id || user?._id)?.toString();
+    console.log('Creator ID:', creatorId);
+    console.log('Current User ID:', currentUserId);
+    console.log('Is Admin?', creatorId === currentUserId);
+    return creatorId === currentUserId;
+  })();
 
   const myBalance = balances?.balances?.find(
     b => b.userId.toString() === (user?.id || user?._id).toString()
@@ -734,6 +747,8 @@ const filteredExpenses = getFilteredExpenses();
                           value={expenseForm.description}
                           onChange={handleExpenseChange}
                           required
+                          minLength="3"
+                          maxLength="100"
                           style={styles.input}
                         />
                       </div>
@@ -742,9 +757,10 @@ const filteredExpenses = getFilteredExpenses();
                         <input
                           type="number"
                           name="amount"
-                          placeholder="0.00"
+                          placeholder="0"
                           value={expenseForm.amount}
                           onChange={handleExpenseChange}
+                          onBlur={handleAmountBlur}
                           required
                           min="0.01"
                           step="0.01"
@@ -796,8 +812,12 @@ const filteredExpenses = getFilteredExpenses();
                           name="date"
                           value={expenseForm.date}
                           onChange={handleExpenseChange}
+                          max={new Date().toISOString().split('T')[0]}
+                          min="2020-01-01"
                           style={styles.input}
+                          required
                         />
+                        <small style={styles.helpText}>You cannot select a future date.</small>
                       </div>
                       <div style={styles.formGroup}>
                         <label style={styles.label}>Split Type *</label>
@@ -1006,22 +1026,30 @@ const filteredExpenses = getFilteredExpenses();
 
         {/* Delete Button (Only for Creator/Admin) */}
         {(() => {
-          const expenseCreatorId = expense.createdBy?._id || expense.createdBy?.id;
-          const currentUserId = user?.id || user?._id;
-          const canDelete =
-            expenseCreatorId?.toString() === currentUserId?.toString() || isAdmin;
-
-          return (
-            canDelete && (
-              <button
-                onClick={() => handleDeleteExpense(expense._id)}
-                style={styles.deleteExpenseBtn}
-              >
-                Delete
-              </button>
-            )
-          );
-        })()}
+  // Get IDs safely
+  const expenseCreatorId = (expense.createdBy._id || expense.createdBy.id)?.toString();
+  const currentUserId = (user?.id || user?._id)?.toString();
+  
+  // Check if current user created this expense OR is group admin
+  const isExpenseCreator = expenseCreatorId === currentUserId;
+  const canDelete = isExpenseCreator || isAdmin;
+  
+  // Debug log
+  console.log('Expense creator:', expenseCreatorId);
+  console.log('Current user:', currentUserId);
+  console.log('Is creator?', isExpenseCreator);
+  console.log('Is admin?', isAdmin);
+  console.log('Can delete?', canDelete);
+  
+  return canDelete && (
+    <button
+      onClick={() => handleDeleteExpense(expense._id)}
+      style={styles.deleteExpenseBtn}
+    >
+      Delete
+    </button>
+  );
+})()}
       </div>
     ))}
   </div>
@@ -1071,6 +1099,7 @@ const filteredExpenses = getFilteredExpenses();
                 value={memberEmail}
                 onChange={(e) => setMemberEmail(e.target.value)}
                 required
+                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
                 style={styles.addMemberInput}
                 autoFocus
               />
@@ -1086,45 +1115,56 @@ const filteredExpenses = getFilteredExpenses();
       )}
 
       <div style={styles.membersList}>
-        {group.members.map(member => {
-          const memberId = (member._id || member.id)?.toString();
-          const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
-          const currentUserId = (user?.id || user?._id)?.toString();
+      {group.members.map(member => {
+  // Safely extract IDs
+  const memberId = (member._id || member.id)?.toString();
+  const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
+  const currentUserId = (user?.id || user?._id)?.toString();
 
-          const isCreator = memberId === creatorId;
-          const isCurrentUser = memberId === currentUserId;
-          const canRemove = isAdmin && !isCreator;
+  // Determine badges and permissions
+  const isCreator = memberId === creatorId;
+  const isCurrentUser = memberId === currentUserId;
+  
+  // ONLY ADMIN can remove members, and can't remove creator or themselves
+  const canRemove = isAdmin && !isCreator && memberId !== currentUserId;
+  
+  // Debug
+  console.log('Member:', member.name);
+  console.log('Is Admin?', isAdmin);
+  console.log('Is Creator?', isCreator);
+  console.log('Is Current User?', isCurrentUser);
+  console.log('Can Remove?', canRemove);
 
-          return (
-            <div key={member._id} style={styles.memberCard}>
-              <div style={styles.memberInfo}>
-                <div style={styles.memberAvatar}>
-                  {member.name.charAt(0).toUpperCase()}
-                </div>
-                <div>
-                  <div style={styles.memberName}>
-                    {member.name}
-                    {isCreator && (
-                      <span style={styles.adminBadge}>ADMIN</span>
-                    )}
-                    {isCurrentUser && (
-                      <span style={styles.youBadge}>YOU</span>
-                    )}
-                  </div>
-                  <div style={styles.memberEmail}>{member.email}</div>
-                </div>
-              </div>
-              {canRemove && (
-                <button
-                  onClick={() => handleRemoveMember(member._id)}
-                  style={styles.removeBtn}
-                >
-                  Remove
-                </button>
-              )}
-            </div>
-          );
-        })}
+  return (
+    <div key={member._id} style={styles.memberCard}>
+      <div style={styles.memberInfo}>
+        <div style={styles.memberAvatar}>
+          {member.name.charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <div style={styles.memberName}>
+            {member.name}
+            {isCreator && (
+              <span style={styles.adminBadge}>ADMIN</span>
+            )}
+            {isCurrentUser && (
+              <span style={styles.youBadge}>YOU</span>
+            )}
+          </div>
+          <div style={styles.memberEmail}>{member.email}</div>
+        </div>
+      </div>
+      {canRemove && (
+        <button
+          onClick={() => handleRemoveMember(member._id)}
+          style={styles.removeBtn}
+        >
+          Remove
+        </button>
+      )}
+    </div>
+  );
+})}
       </div>
     </div>
     {/* Toast Notification */}
