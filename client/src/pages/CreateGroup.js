@@ -2,6 +2,7 @@ import { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
+import UserDropdown from '../components/UserDropdown';
 
 function CreateGroup() {
   const [formData, setFormData] = useState({
@@ -12,7 +13,7 @@ function CreateGroup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { user } = useContext(AuthContext);
+  const { user, logout } = useContext(AuthContext);
 
   const { name, description, memberEmails } = formData;
 
@@ -50,7 +51,7 @@ function CreateGroup() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>SettleUp</h1>
-        <span style={styles.userName}>👋 {user?.name}</span>
+        <UserDropdown user={user} onLogout={logout} />
       </div>
 
       <div style={styles.content}>
@@ -73,22 +74,18 @@ function CreateGroup() {
           )}
 
           <form onSubmit={onSubmit}>
-          <div style={styles.inputGroup}>
-  <label style={styles.label}>Group Name *</label>
-  <input
-    type="text"
-    name="name"
-    placeholder="e.g., Goa Trip 2024, Apartment 301"
-    value={formData.name}
-    onChange={onChange}
-    required
-    maxLength="50"
-    style={styles.input}
-  />
-  <small style={styles.helpText}>
-    💡 Choose a unique name (max 50 characters)
-  </small>
-</div>
+            <div style={styles.inputGroup}>
+              <label style={styles.label}>Group Name *</label>
+              <input
+                type="text"
+                name="name"
+                placeholder="e.g., Goa Trip 2024, Apartment 301"
+                value={name}
+                onChange={onChange}
+                required
+                style={styles.input}
+              />
+            </div>
 
             <div style={styles.inputGroup}>
               <label style={styles.label}>Description (Optional)</label>
@@ -153,11 +150,6 @@ const styles = {
     fontSize: '24px',
     color: '#1cc29f',
     fontWeight: '700'
-  },
-  userName: {
-    fontSize: '16px',
-    color: '#333',
-    fontWeight: '500'
   },
   content: {
     padding: '40px',

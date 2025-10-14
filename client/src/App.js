@@ -5,6 +5,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import CreateGroup from './pages/CreateGroup';
 import GroupDetail from './pages/GroupDetail';
+import Profile from './pages/Profile';
 import PrivateRoute from './components/PrivateRoute';
 
 function App() {
@@ -19,6 +20,14 @@ function App() {
             element={
               <PrivateRoute>
                 <Dashboard />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <PrivateRoute>
+                <Profile />
               </PrivateRoute>
             }
           />

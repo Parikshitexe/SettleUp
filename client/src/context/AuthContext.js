@@ -72,6 +72,33 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  // NEW: Update user profile
+  const updateProfile = async (profileData) => {
+    try {
+      const res = await axios.put('http://localhost:5000/api/user/profile', profileData);
+      setUser(res.data);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.msg || 'Failed to update profile'
+      };
+    }
+  };
+
+  // NEW: Change password
+  const changePassword = async (passwordData) => {
+    try {
+      await axios.put('http://localhost:5000/api/user/change-password', passwordData);
+      return { success: true };
+    } catch (error) {
+      return {
+        success: false,
+        error: error.response?.data?.msg || 'Failed to change password'
+      };
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -80,7 +107,10 @@ export const AuthProvider = ({ children }) => {
         loading,
         register,
         login,
-        logout
+        logout,
+        updateProfile,
+        changePassword,
+        loadUser
       }}
     >
       {children}

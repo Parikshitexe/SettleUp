@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
+import UserDropdown from '../components/UserDropdown';
 import axios from 'axios';
 
 function Dashboard() {
@@ -24,11 +25,6 @@ function Dashboard() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
-
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -42,12 +38,7 @@ function Dashboard() {
     <div style={styles.container}>
       <div style={styles.header}>
         <h1 style={styles.title}>SettleUp</h1>
-        <div style={styles.userSection}>
-          <span style={styles.userName}>👋 {user?.name}</span>
-          <button onClick={handleLogout} style={styles.logoutBtn}>
-            Logout
-          </button>
-        </div>
+        <UserDropdown user={user} onLogout={logout} />
       </div>
 
       <div style={styles.content}>
@@ -120,27 +111,6 @@ const styles = {
     fontSize: '24px',
     color: '#1cc29f',
     fontWeight: '700'
-  },
-  userSection: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '20px'
-  },
-  userName: {
-    fontSize: '16px',
-    color: '#333',
-    fontWeight: '500'
-  },
-  logoutBtn: {
-    padding: '8px 20px',
-    backgroundColor: '#dc3545',
-    color: 'white',
-    border: 'none',
-    borderRadius: '4px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    fontWeight: '500',
-    transition: 'background-color 0.3s'
   },
   content: {
     padding: '40px',
