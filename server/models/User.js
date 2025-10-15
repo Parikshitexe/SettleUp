@@ -24,12 +24,41 @@ const userSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    trim: true
+    trim: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return true;
+        return /^[6-9]\d{9}$/.test(v);
+      },
+      message: 'Please enter a valid 10-digit phone number'
+    }
   },
+  // NEW FIELDS FOR PHASE 1 & 2
+  profilePicture: {
+    type: String,
+    default: null // Will store URL or base64 string
+  },
+  friends: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  // For quick lookups
+  friendRequestsSent: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  friendRequestsReceived: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+// Index for faster friend queries
+userSchema.index({ friends: 1 });
+userSchema.index({ email: 1 });
 
 module.exports = mongoose.model('User', userSchema);

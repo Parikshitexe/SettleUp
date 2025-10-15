@@ -72,6 +72,18 @@ router.post('/', [
   try {
     const { name, description, memberEmails } = req.body;
 
+     // NEW: Check for duplicate group name for this user
+     const existingGroup = await Group.findOne({
+      name: { $regex: new RegExp(`^${name}$`, 'i') }, // Case-insensitive
+      members: req.user.id
+    });
+
+    if (existingGroup) {
+      return res.status(400).json({ 
+        msg: 'You already have a group with this name. Please choose a different name.' 
+      });
+    }
+
     // Start with creator as member
     let members = [req.user.id];
     
@@ -140,12 +152,25 @@ router.put('/:id', [
       return res.status(404).json({ msg: 'Group not found' });
     }
 
-    // Only creator can update group details
+    // Only creator can update
     if (group.createdBy.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized to update this group' });
     }
 
     const { name, description } = req.body;
+
+    // NEW: Check for duplicate name (excluding current group)
+    const existingGroup = await Group.findOne({
+      _id: { $ne: req.params.id }, // Exclude current group
+      name: { $regex: new RegExp(`^${name}$`, 'i') },
+      members: req.user.id
+    });
+
+    if (existingGroup) {
+      return res.status(400).json({ 
+        msg: 'You already have another group with this name. Please choose a different name.' 
+      });
+    }
 
     group.name = name;
     group.description = description || group.description;
@@ -245,6 +270,9 @@ router.post('/:id/members', [
 // @route   DELETE /api/groups/:id/members/:memberId
 // @desc    Remove member from group
 // @access  Private
+// @route   DELETE /api/groups/:id/members/:memberId
+// @desc    Remove member from group
+// @access  Private
 router.delete('/:id/members/:memberId', auth, async (req, res) => {
   try {
     const group = await Group.findById(req.params.id);
@@ -253,15 +281,20 @@ router.delete('/:id/members/:memberId', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Group not found' });
     }
 
-    // Only creator or the member themselves can remove
-    if (group.createdBy.toString() !== req.user.id && 
-        req.params.memberId !== req.user.id) {
-      return res.status(401).json({ msg: 'Not authorized' });
+    // CRITICAL: Only group admin can remove members
+    const isGroupAdmin = group.createdBy.toString() === req.user.id;
+    const isRemovingSelf = req.params.memberId === req.user.id;
+
+    // User can only remove themselves OR admin can remove others
+    if (!isRemovingSelf && !isGroupAdmin) {
+      return res.status(401).json({ 
+        msg: 'Not authorized. Only group admin can remove members.' 
+      });
     }
 
-    // Can't remove creator
+    // Can't remove the group creator
     if (req.params.memberId === group.createdBy.toString()) {
-      return res.status(400).json({ msg: 'Cannot remove group creator' });
+      return res.status(400).json({ msg: 'Cannot remove the group creator' });
     }
 
     // Check if member exists in group
@@ -279,7 +312,7 @@ router.delete('/:id/members/:memberId', auth, async (req, res) => {
     const populatedGroup = await Group.findById(group._id)
       .populate('members', 'name email')
       .populate('createdBy', 'name email')
-        .lean();
+      .lean();
 
     res.json(populatedGroup);
   } catch (error) {

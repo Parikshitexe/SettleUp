@@ -19,7 +19,10 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/balances', require('./routes/balances'));
-app.use('/api/settlements', require('./routes/settlements')); // ADD THIS
+app.use('/api/settlements', require('./routes/settlements'));
+app.use('/api/user', require('./routes/user'));
+app.use('/api/friends', require('./routes/friends'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 const PORT = process.env.PORT || 5000;
 
@@ -32,7 +35,8 @@ const startServer = async () => {
       console.log('✅ Group routes: /api/groups');
       console.log('✅ Expense routes: /api/expenses');
       console.log('✅ Balance routes: /api/balances');
-      console.log('✅ Settlement routes: /api/settlements'); // ADD THIS
+      console.log('✅ Settlement routes: /api/settlements');
+      console.log('✅ User routes: /api/user'); // NEW
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);

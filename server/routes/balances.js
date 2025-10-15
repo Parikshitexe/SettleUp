@@ -4,6 +4,7 @@ const Expense = require('../models/Expense');
 const Group = require('../models/Group');
 const Settlement = require('../models/Settlement');
 const auth = require('../middleware/auth');
+const DebtSimplifier = require('../utils/debtSimplifier');
 
 // @route   GET /api/balances/group/:groupId
 // @desc    Get balances for a group (including settlements)
@@ -96,48 +97,58 @@ settlements.forEach(settlement => {
       balances[userId].totalOwed = parseFloat(balances[userId].totalOwed.toFixed(2));
     });
 
-    // Create simplified debt structure
-    const balanceArray = Object.values(balances);
+// Create simplified debt structure
+const balanceArray = Object.values(balances);
     
-    // Separate into creditors (owed money) and debtors (owe money)
-    const creditors = balanceArray.filter(b => b.netBalance > 0.01);
-    const debtors = balanceArray.filter(b => b.netBalance < -0.01);
+// Get ORIGINAL transactions (simple approach - already there)
+const creditors = balanceArray.filter(b => b.netBalance > 0.01);
+const debtors = balanceArray.filter(b => b.netBalance < -0.01);
 
-    // Calculate who owes whom (simplified)
-    const transactions = [];
-    
-    // Create working copies
-    const creditorsCopy = creditors.map(c => ({ ...c, remaining: c.netBalance }));
-    const debtorsCopy = debtors.map(d => ({ ...d, remaining: Math.abs(d.netBalance) }));
+const transactions = [];
 
-    creditorsCopy.forEach(creditor => {
-      debtorsCopy.forEach(debtor => {
-        if (creditor.remaining > 0.01 && debtor.remaining > 0.01) {
-          const amount = Math.min(creditor.remaining, debtor.remaining);
-          
-          transactions.push({
-            from: {
-              userId: debtor.userId,
-              name: debtor.name
-            },
-            to: {
-              userId: creditor.userId,
-              name: creditor.name
-            },
-            amount: parseFloat(amount.toFixed(2))
-          });
+// Create working copies
+const creditorsCopy = creditors.map(c => ({ ...c, remaining: c.netBalance }));
+const debtorsCopy = debtors.map(d => ({ ...d, remaining: Math.abs(d.netBalance) }));
 
-          creditor.remaining -= amount;
-          debtor.remaining -= amount;
-        }
+creditorsCopy.forEach(creditor => {
+  debtorsCopy.forEach(debtor => {
+    if (creditor.remaining > 0.01 && debtor.remaining > 0.01) {
+      const amount = Math.min(creditor.remaining, debtor.remaining);
+      
+      transactions.push({
+        from: {
+          userId: debtor.userId,
+          name: debtor.name
+        },
+        to: {
+          userId: creditor.userId,
+          name: creditor.name
+        },
+        amount: parseFloat(amount.toFixed(2))
       });
-    });
 
-    res.json({
-      groupId: req.params.groupId,
-      balances: balanceArray,
-      transactions
-    });
+      creditor.remaining -= amount;
+      debtor.remaining -= amount;
+    }
+  });
+});
+
+// NEW: Get SIMPLIFIED transactions using our algorithm
+const simplifiedTransactions = DebtSimplifier.simplify(balanceArray);
+
+// NEW: Get comparison stats
+const simplificationStats = DebtSimplifier.getSimplificationStats(
+  transactions, 
+  simplifiedTransactions
+);
+
+res.json({
+  groupId: req.params.groupId,
+  balances: balanceArray,
+  transactions, // Original simple transactions
+  simplifiedTransactions, // NEW: Optimized transactions
+  simplificationStats // NEW: Stats showing improvement
+});
   } catch (error) {
     console.error('Get balances error:', error.message);
     if (error.kind === 'ObjectId') {

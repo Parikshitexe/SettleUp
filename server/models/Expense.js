@@ -45,7 +45,12 @@ const expenseSchema = new mongoose.Schema({
   },
   date: {
     type: Date,
-    default: Date.now
+    default: Date.now,
+    validator: function(v) {
+      const today = new Date();
+      today.setHours(23, 59, 59, 999);
+      return v <= today;
+    }
   },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
