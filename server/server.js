@@ -2,6 +2,8 @@ const express = require('express');
 const connectDB = require('./config/db');
 const cors = require('cors');
 require('dotenv').config();
+const cron = require('node-cron');
+const { processPaymentReminders } = require('./utils/paymentReminderCron');
 
 const app = express();
 
@@ -23,6 +25,7 @@ app.use('/api/settlements', require('./routes/settlements'));
 app.use('/api/user', require('./routes/user'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/payment-reminders', require('./routes/paymentReminders'));
 
 const PORT = process.env.PORT || 5000;
 
@@ -36,7 +39,17 @@ const startServer = async () => {
       console.log('✅ Expense routes: /api/expenses');
       console.log('✅ Balance routes: /api/balances');
       console.log('✅ Settlement routes: /api/settlements');
-      console.log('✅ User routes: /api/user'); // NEW
+      console.log('✅ User routes: /api/user');
+      console.log('✅ Friends routes: /api/friends');
+      console.log('✅ Notifications routes: /api/notifications');
+      console.log('✅ Payment Reminders routes: /api/payment-reminders');
+      
+      // NEW: Setup cron job for payment reminders
+      cron.schedule('0 * * * *', () => {
+        console.log('⏰ Running payment reminder processor...');
+        processPaymentReminders();
+      });
+      console.log('⏰ Payment reminder cron job started (runs every hour)');
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
