@@ -2,24 +2,29 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AuthProvider } from './context/AuthContext';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import Dashboard from './pages/Dashboard';
+import EnhancedDashboard from './pages/EnhancedDashboard';
 import CreateGroup from './pages/CreateGroup';
 import GroupDetail from './pages/GroupDetail';
 import Profile from './pages/Profile';
+import Friends from './pages/Friends';
 import PrivateRoute from './components/PrivateRoute';
+import PaymentReminders from './pages/PaymentReminders';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
+          {/* Public Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          
+          {/* Protected Routes */}
           <Route
             path="/dashboard"
             element={
               <PrivateRoute>
-                <Dashboard />
+                <EnhancedDashboard />
               </PrivateRoute>
             }
           />
@@ -31,6 +36,22 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route
+            path="/friends"
+            element={
+              <PrivateRoute>
+                <Friends />
+              </PrivateRoute>
+            }
+          />
+          <Route
+  path="/reminders"
+  element={
+    <PrivateRoute>
+      <PaymentReminders />
+    </PrivateRoute>
+  }
+/>
           <Route
             path="/groups/create"
             element={
@@ -47,7 +68,12 @@ function App() {
               </PrivateRoute>
             }
           />
-          <Route path="/" element={<Navigate to="/dashboard" />} />
+          
+          {/* Default Route */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          
+          {/* Catch all - redirect to dashboard */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </Router>
     </AuthProvider>

@@ -50,7 +50,7 @@ function CreateGroup() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>SettleUp</h1>
+        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
         <UserDropdown user={user} onLogout={logout} />
       </div>
 
@@ -149,7 +149,8 @@ const styles = {
     margin: 0,
     fontSize: '24px',
     color: '#1cc29f',
-    fontWeight: '700'
+    fontWeight: '700',
+    textDecoration: 'none'
   },
   content: {
     padding: '40px',

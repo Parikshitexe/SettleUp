@@ -81,6 +81,15 @@ function UserDropdown({ user, onLogout }) {
             <span>Friends</span>
           </Link>
 
+          <Link
+  to="/reminders"
+  style={styles.dropdownItem}
+  onClick={() => setIsOpen(false)}
+>
+  <span style={styles.itemIcon}>⏰</span>
+  <span>Payment Reminders</span>
+</Link>
+
           <div style={styles.divider}></div>
 
           <button

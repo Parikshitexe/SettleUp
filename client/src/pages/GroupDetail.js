@@ -4,6 +4,7 @@ import axios from 'axios';
 import AuthContext from '../context/AuthContext';
 import ExpenseAnalytics from '../components/ExpenseAnalytics';
 import Toast from '../components/Toast';
+import UserDropdown from '../components/UserDropdown';
 
 
 function GroupDetail() {
@@ -438,7 +439,7 @@ const filteredExpenses = getFilteredExpenses();
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>SettleUp</h1>
+        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
         <span style={styles.userName}>👋 {user?.name}</span>
       </div>
 
@@ -1287,7 +1288,8 @@ const styles = {
   margin: 0,
   fontSize: '24px',
   color: '#1cc29f',
-  fontWeight: '700'
+  fontWeight: '700',
+  textDecoration: 'none'
   },
   userName: {
   fontSize: '16px',
