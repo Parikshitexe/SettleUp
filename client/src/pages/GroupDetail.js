@@ -5,12 +5,14 @@ import AuthContext from '../context/AuthContext';
 import ExpenseAnalytics from '../components/ExpenseAnalytics';
 import Toast from '../components/Toast';
 import UserDropdown from '../components/UserDropdown';
+import BudgetSettings from '../components/BudgetSettings';
 
 
 function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useContext(AuthContext);
+  const { logout } = useContext(AuthContext);
   
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -395,9 +397,7 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
   const isAdmin = (() => {
     const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
     const currentUserId = (user?.id || user?._id)?.toString();
-    console.log('Creator ID:', creatorId);
-    console.log('Current User ID:', currentUserId);
-    console.log('Is Admin?', creatorId === currentUserId);
+    
     return creatorId === currentUserId;
   })();
 
@@ -438,10 +438,10 @@ const filteredExpenses = getFilteredExpenses();
 
   return (
     <div style={styles.container}>
-      <div style={styles.header}>
-        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
-        <span style={styles.userName}>👋 {user?.name}</span>
-      </div>
+    <div style={styles.header}>
+      <Link to="/dashboard" style={styles.title}>SettleUp</Link>
+      <UserDropdown user={user} onLogout={logout} />
+    </div>
 
       <div style={styles.content}>
         <div style={styles.backLink}>
@@ -688,6 +688,12 @@ const filteredExpenses = getFilteredExpenses();
             </div>
           </div>
         )}
+
+        {/* Budget Management Section */}
+        <div style={styles.section}>
+          <h3 style={styles.sectionTitle}>💰 Budget Management</h3>
+          <BudgetSettings type="group" groupId={id} />
+        </div>
 
         {/* EXPENSES AND ANALYTICS WITH TABS */}
         <div style={styles.section}>
@@ -1035,13 +1041,7 @@ const filteredExpenses = getFilteredExpenses();
   const isExpenseCreator = expenseCreatorId === currentUserId;
   const canDelete = isExpenseCreator || isAdmin;
   
-  // Debug log
-  console.log('Expense creator:', expenseCreatorId);
-  console.log('Current user:', currentUserId);
-  console.log('Is creator?', isExpenseCreator);
-  console.log('Is admin?', isAdmin);
-  console.log('Can delete?', canDelete);
-  
+
   return canDelete && (
     <button
       onClick={() => handleDeleteExpense(expense._id)}
@@ -1129,13 +1129,7 @@ const filteredExpenses = getFilteredExpenses();
   // ONLY ADMIN can remove members, and can't remove creator or themselves
   const canRemove = isAdmin && !isCreator && memberId !== currentUserId;
   
-  // Debug
-  console.log('Member:', member.name);
-  console.log('Is Admin?', isAdmin);
-  console.log('Is Creator?', isCreator);
-  console.log('Is Current User?', isCurrentUser);
-  console.log('Can Remove?', canRemove);
-
+  
   return (
     <div key={member._id} style={styles.memberCard}>
       <div style={styles.memberInfo}>

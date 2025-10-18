@@ -2,6 +2,8 @@ import { useState, useContext, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AuthContext from '../context/AuthContext';
 import UserDropdown from '../components/UserDropdown';
+import NotificationBell from '../components/NotificationBell';
+import BudgetSettings from '../components/BudgetSettings';
 import Toast from '../components/Toast';
 
 function Profile() {
@@ -10,14 +12,12 @@ function Profile() {
   const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  // Profile form
   const [profileForm, setProfileForm] = useState({
     name: '',
     email: '',
     phone: ''
   });
 
-  // Password form
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     newPassword: '',
@@ -145,15 +145,25 @@ function Profile() {
     return name.charAt(0).toUpperCase();
   };
 
+  if (!user) {
+    return (
+      <div style={styles.loadingContainer}>
+        <div style={styles.spinner}></div>
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
   return (
     <div style={styles.container}>
-      {/* Header */}
       <div style={styles.header}>
-        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
-        <UserDropdown user={user} onLogout={logout} />
+        <h1 style={styles.title}>SettleUp</h1>
+        <div style={styles.headerRight}>
+          <NotificationBell />
+          <UserDropdown user={user} onLogout={logout} />
+        </div>
       </div>
 
-      {/* Content */}
       <div style={styles.content}>
         <div style={styles.backLink}>
           <Link to="/dashboard" style={styles.link}>
@@ -214,6 +224,15 @@ function Profile() {
                 }}
               >
                 Security
+              </button>
+              <button
+                onClick={() => setActiveTab('budget')}
+                style={{
+                  ...styles.tab,
+                  ...(activeTab === 'budget' ? styles.tabActive : {})
+                }}
+              >
+                Budget
               </button>
             </div>
 
@@ -371,11 +390,19 @@ function Profile() {
                 </form>
               </div>
             )}
+
+            {/* Budget Tab */}
+            {activeTab === 'budget' && (
+              <div style={styles.card}>
+                <h3 style={styles.cardTitle}>Personal Monthly Budget</h3>
+                <p style={styles.subtitle}>Set a monthly spending limit for yourself across all groups</p>
+                <BudgetSettings type="personal" />
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
         <Toast
           message={toast.message}
@@ -398,14 +425,21 @@ const styles = {
     boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center'
+    alignItems: 'center',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100
   },
   title: {
     margin: 0,
     fontSize: '24px',
     color: '#1cc29f',
-    fontWeight: '700',
-    textDecoration: 'none'
+    fontWeight: '700'
+  },
+  headerRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '16px'
   },
   content: {
     padding: '40px',
@@ -508,7 +542,9 @@ const styles = {
   tab: {
     padding: '12px 24px',
     backgroundColor: 'transparent',
-    border: 'none',
+    borderLeft: 'none',
+    borderRight: 'none',
+    borderTop: 'none',
     borderBottom: '3px solid transparent',
     cursor: 'pointer',
     fontSize: '15px',
@@ -529,10 +565,15 @@ const styles = {
     boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
   },
   cardTitle: {
-    margin: '0 0 24px 0',
+    margin: '0 0 8px 0',
     fontSize: '20px',
     fontWeight: '600',
     color: '#333'
+  },
+  subtitle: {
+    margin: '0 0 24px 0',
+    fontSize: '14px',
+    color: '#666'
   },
   formGroup: {
     marginBottom: '24px'
@@ -579,10 +620,25 @@ const styles = {
     fontWeight: '600',
     cursor: 'pointer',
     transition: 'background-color 0.3s'
+  },
+  loadingContainer: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    backgroundColor: '#f5f5f5'
+  },
+  spinner: {
+    width: '50px',
+    height: '50px',
+    border: '5px solid #f3f3f3',
+    borderTop: '5px solid #1cc29f',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
   }
 };
 
-// Make responsive
 if (window.innerWidth <= 768) {
   styles.profileLayout = {
     ...styles.profileLayout,

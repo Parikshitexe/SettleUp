@@ -9,6 +9,7 @@ import Profile from './pages/Profile';
 import Friends from './pages/Friends';
 import PrivateRoute from './components/PrivateRoute';
 import PaymentReminders from './pages/PaymentReminders';
+import VerifyEmail from './pages/VerifyEmail';
 
 function App() {
   return (
@@ -36,6 +37,7 @@ function App() {
               </PrivateRoute>
             }
           />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route
             path="/friends"
             element={

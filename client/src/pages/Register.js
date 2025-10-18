@@ -25,11 +25,12 @@ function Register() {
     e.preventDefault();
     setError('');
     setLoading(true);
-
+  
     const result = await register(formData);
     
     if (result.success) {
-      navigate('/dashboard');
+      // Change this line:
+      navigate('/verify-email'); // Instead of '/dashboard'
     } else {
       setError(result.error);
       setLoading(false);
@@ -54,12 +55,19 @@ function Register() {
             <input
               type="text"
               name="name"
-              placeholder="John Doe"
+              placeholder="Enter your full name"
               value={name}
-              onChange={onChange}
+              onChange={(e) => {
+                // Only allow letters and spaces
+                const value = e.target.value.replace(/[^a-zA-Z\s]/g, '');
+                setFormData({ ...formData, name: value });
+              }}
               required
+              minLength="2"
+              maxLength="50"
               style={styles.input}
             />
+            
           </div>
 
           <div style={styles.inputGroup}>
@@ -76,25 +84,25 @@ function Register() {
           </div>
 
           <div style={styles.inputGroup}>
-  <label style={styles.label}>Phone (Optional)</label>
-  <input
-    type="tel"
-    name="phone"
-    placeholder="+91 9876543210"
-    value={formData.phone}
-    onChange={(e) => {
-      // Only allow numbers and limit to 10 digits
-      const value = e.target.value.replace(/\D/g, '').slice(0, 10);
-      setFormData({ ...formData, phone: value });
-    }}
-    pattern="[6-9][0-9]{9}"
-    maxLength="10"
-    style={styles.input}
-  />
-  <small style={styles.helpText}>
-    💡 Enter 10-digit mobile number
-  </small>
-</div>
+            <label style={styles.label}>Phone (Optional)</label>
+            <input
+              type="tel"
+              name="phone"
+              placeholder="+91 9876543210"
+              value={phone}
+              onChange={(e) => {
+                // Only allow numbers and limit to 10 digits
+                const value = e.target.value.replace(/\D/g, '').slice(0, 10);
+                setFormData({ ...formData, phone: value });
+              }}
+              pattern="[6-9][0-9]{9}"
+              maxLength="10"
+              style={styles.input}
+            />
+            <small style={styles.helpText}>
+              💡 Enter 10-digit mobile number
+            </small>
+          </div>
 
           <div style={styles.inputGroup}>
             <label style={styles.label}>Password</label>
@@ -135,12 +143,12 @@ function Register() {
 }
 
 const styles = {
-    helpText: {
-        display: 'block',
-        marginTop: '6px',
-        fontSize: '12px',
-        color: '#666'
-      },
+  helpText: {
+    display: 'block',
+    marginTop: '6px',
+    fontSize: '12px',
+    color: '#666'
+  },
   container: {
     minHeight: '100vh',
     display: 'flex',
