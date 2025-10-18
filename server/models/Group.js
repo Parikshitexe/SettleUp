@@ -1,3 +1,4 @@
+// server/models/Group.js - UPDATED VERSION
 const mongoose = require('mongoose');
 
 const groupSchema = new mongoose.Schema({
@@ -19,7 +20,27 @@ const groupSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
+  budgetLimit: {
+    type: Number,
+    default: null, // No limit by default
+    min: 0.01
+  },
+  budgetSetBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User' // Who set the budget
+  },
+  budgetSetAt: {
+    type: Date // When was budget last set/updated
+  },
+  budgetExceedNotified: {
+    type: Boolean,
+    default: false // Track if members were notified about exceeding
+  },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }

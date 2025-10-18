@@ -26,6 +26,7 @@ app.use('/api/user', require('./routes/user'));
 app.use('/api/friends', require('./routes/friends'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/payment-reminders', require('./routes/paymentReminders'));
+app.use('/api/budgets', require('./routes/budgets'));
 
 const PORT = process.env.PORT || 5000;
 
@@ -43,6 +44,7 @@ const startServer = async () => {
       console.log('✅ Friends routes: /api/friends');
       console.log('✅ Notifications routes: /api/notifications');
       console.log('✅ Payment Reminders routes: /api/payment-reminders');
+      console.log('✅ Budget routes: /api/budgets');
       
       // NEW: Setup cron job for payment reminders
       cron.schedule('0 * * * *', () => {

@@ -4,6 +4,7 @@ const { body, validationResult } = require('express-validator');
 const Expense = require('../models/Expense');
 const Group = require('../models/Group');
 const auth = require('../middleware/auth');
+const BudgetService = require('../utils/budgetService');
 
 // @route   GET /api/expenses/group/:groupId
 // @desc    Get all expenses for a group
@@ -192,6 +193,15 @@ router.post('/', [
     });
 
     await expense.save();
+
+    // Check if budget is exceeded
+    try {
+      await BudgetService.checkGroupBudget(groupId);
+      await BudgetService.checkPersonalBudget(req.user.id);
+    } catch (error) {
+      console.error('Budget check error:', error);
+      // Don't fail the expense creation if budget check fails
+    }
 
     // Populate and return
     const populatedExpense = await Expense.findById(expense._id)

@@ -6,7 +6,6 @@ const { body, validationResult } = require('express-validator');
 const PaymentReminder = require('../models/PaymentReminder');
 const Group = require('../models/Group');
 const Notification = require('../models/Notification');
-const NotificationService = require('../utils/notificationService');
 const User = require('../models/User');
 
 // @route   GET /api/payment-reminders
@@ -14,7 +13,7 @@ const User = require('../models/User');
 // @access  Private
 router.get('/', auth, async (req, res) => {
   try {
-    const { type = 'all' } = req.query; // 'all', 'sent', 'received', 'pending'
+    const { type = 'all' } = req.query;
 
     let query = { isActive: true };
 
@@ -80,9 +79,7 @@ router.post('/', [
   auth,
   body('groupId', 'Group ID is required').notEmpty(),
   body('to', 'Recipient user ID is required').notEmpty(),
-  body('amount', 'Amount must be greater than 0').isFloat({ min: 0.01 }),
-  body('reminderType', 'Invalid reminder type').isIn(['one_time', 'daily', 'weekly']),
-  body('dueDate', 'Due date must be in future').optional().isISO8601()
+  body('amount', 'Amount must be greater than 0').isFloat({ min: 0.01 })
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -90,18 +87,20 @@ router.post('/', [
   }
 
   try {
-    const { groupId, to, amount, reminderType, description, dueDate } = req.body;
+    const { groupId, to, amount, reminderType = 'one_time', description = '', dueDate } = req.body;
     const from = req.user.id;
 
+    console.log('Creating reminder:', { groupId, to, from, amount });
+
     // Validate group exists
-    const group = await Group.findById(groupId);
+    const group = await Group.findById(groupId).populate('members', 'name email');
     if (!group) {
       return res.status(404).json({ msg: 'Group not found' });
     }
 
     // Check if user is group member
-    const isFromMember = group.members.some(m => m.toString() === from);
-    const isToMember = group.members.some(m => m.toString() === to);
+    const isFromMember = group.members.some(m => m._id.toString() === from);
+    const isToMember = group.members.some(m => m._id.toString() === to);
 
     if (!isFromMember || !isToMember) {
       return res.status(400).json({ msg: 'Both users must be group members' });
@@ -126,43 +125,52 @@ router.post('/', [
       to,
       amount: parseFloat(amount),
       reminderType,
-      description: description || '',
+      description,
       dueDate: dueDate ? new Date(dueDate) : null,
       nextReminderDate,
       lastReminderSent: new Date()
     });
 
     await reminder.save();
+    console.log('Reminder saved:', reminder._id);
 
-    // Create notification
-    const fromUser = await PaymentReminder.findById(reminder._id).populate('from', 'name');
-    const toUser = await PaymentReminder.findById(reminder._id).populate('to');
-
-    await Notification.create({
-      recipient: to,
-      type: 'payment_reminder',
-      title: 'Payment Reminder',
-      message: `${(await Group.findById(from).populate('from', 'name')).members} reminded you to pay ₹${amount.toFixed(2)}`,
-      relatedUser: from,
-      relatedGroup: groupId,
-      actionUrl: `/groups/${groupId}`,
-      read: false
-    });
+    // Create notification separately - don't let it crash the request
+    try {
+      const fromUser = await User.findById(from);
+      
+      await Notification.create({
+        recipient: to,
+        type: 'payment_reminder',
+        title: 'Payment Reminder',
+        message: `${fromUser.name} reminded you to pay ₹${parseFloat(amount).toFixed(2)} in ${group.name}`,
+        relatedUser: from,
+        relatedGroup: groupId,
+        actionUrl: `/groups/${groupId}`,
+        read: false
+      });
+      console.log('Notification created');
+    } catch (notifError) {
+      console.error('Notification error (non-critical):', notifError.message);
+    }
 
     const populatedReminder = await PaymentReminder.findById(reminder._id)
       .populate('from', 'name email profilePicture')
       .populate('to', 'name email profilePicture')
       .populate('group', 'name');
 
-    res.json(populatedReminder);
+    res.json({
+      success: true,
+      msg: 'Payment reminder created successfully',
+      data: populatedReminder
+    });
   } catch (error) {
-    console.error('Create payment reminder error:', error.message);
-    res.status(500).json({ msg: 'Server error' });
+    console.error('Create payment reminder error:', error);
+    res.status(500).json({ msg: error.message || 'Server error' });
   }
 });
 
 // @route   PUT /api/payment-reminders/:id/acknowledge
-// @desc    Acknowledge/snooze a payment reminder
+// @desc    Acknowledge a payment reminder
 // @access  Private
 router.put('/:id/acknowledge', auth, async (req, res) => {
   try {
@@ -204,7 +212,6 @@ router.put('/:id/snooze', auth, async (req, res) => {
       return res.status(401).json({ msg: 'Not authorized' });
     }
 
-    // Snooze for 1 day
     const snoozeDate = new Date();
     snoozeDate.setDate(snoozeDate.getDate() + 1);
     reminder.nextReminderDate = snoozeDate;
@@ -229,7 +236,6 @@ router.put('/:id/deactivate', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Reminder not found' });
     }
 
-    // Either sender or receiver can deactivate
     if (reminder.from.toString() !== req.user.id && reminder.to.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }
@@ -255,7 +261,6 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Reminder not found' });
     }
 
-    // Only sender can delete
     if (reminder.from.toString() !== req.user.id) {
       return res.status(401).json({ msg: 'Not authorized' });
     }

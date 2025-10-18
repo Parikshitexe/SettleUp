@@ -33,16 +33,28 @@ const userSchema = new mongoose.Schema({
       message: 'Please enter a valid 10-digit phone number'
     }
   },
-  // NEW FIELDS FOR PHASE 1 & 2
+  // Email Verification Fields
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+  verificationOTP: {
+    type: String,
+    default: null
+  },
+  otpExpiry: {
+    type: Date,
+    default: null
+  },
+  // Existing fields
   profilePicture: {
     type: String,
-    default: null // Will store URL or base64 string
+    default: null
   },
   friends: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
   }],
-  // For quick lookups
   friendRequestsSent: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'
@@ -57,7 +69,7 @@ const userSchema = new mongoose.Schema({
   }
 });
 
-// Index for faster friend queries
+// Index for faster queries
 userSchema.index({ friends: 1 });
 userSchema.index({ email: 1 });
 
