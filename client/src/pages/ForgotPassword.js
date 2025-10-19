@@ -1,35 +1,26 @@
-import { useState, useContext } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import AuthContext from '../context/AuthContext';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import axios from 'axios';
 
-function Login() {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: ''
-  });
+function ForgotPassword() {
+  const [email, setEmail] = useState('');
+  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  
-  const { login } = useContext(AuthContext);
-  const navigate = useNavigate();
 
-  const { email, password } = formData;
-
-  const onChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const onSubmit = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
+    setMessage('');
     setLoading(true);
 
-    const result = await login(formData);
-    
-    if (result.success) {
-      navigate('/dashboard');
-    } else {
-      setError(result.error);
+    try {
+      const res = await axios.post('http://localhost:5000/api/auth/forgot-password', { email });
+      setMessage(res.data.msg);
+      setEmail('');
+    } catch (err) {
+      setError(err.response?.data?.msg || 'Failed to send reset email');
+    } finally {
       setLoading(false);
     }
   };
@@ -37,8 +28,20 @@ function Login() {
   return (
     <div style={styles.container}>
       <div style={styles.card}>
-        <h2 style={styles.title}>Welcome Back!</h2>
-        <p style={styles.subtitle}>Login to continue to SettleUp</p>
+        <div style={styles.iconContainer}>
+          <span style={styles.icon}>🔐</span>
+        </div>
+        
+        <h2 style={styles.title}>Forgot Password?</h2>
+        <p style={styles.subtitle}>
+          No worries! Enter your email and we'll send you reset instructions.
+        </p>
+
+        {message && (
+          <div style={styles.successBox}>
+            ✓ {message}
+          </div>
+        )}
 
         {error && (
           <div style={styles.errorBox}>
@@ -46,28 +49,14 @@ function Login() {
           </div>
         )}
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={handleSubmit}>
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Email</label>
+            <label style={styles.label}>Email Address</label>
             <input
               type="email"
-              name="email"
               placeholder="john@example.com"
               value={email}
-              onChange={onChange}
-              required
-              style={styles.input}
-            />
-          </div>
-
-          <div style={styles.inputGroup}>
-            <label style={styles.label}>Password</label>
-            <input
-              type="password"
-              name="password"
-              placeholder="Enter your password"
-              value={password}
-              onChange={onChange}
+              onChange={(e) => setEmail(e.target.value)}
               required
               style={styles.input}
             />
@@ -82,22 +71,15 @@ function Login() {
               cursor: loading ? 'not-allowed' : 'pointer'
             }}
           >
-            {loading ? 'Logging in...' : 'Login'}
+            {loading ? 'Sending...' : 'Send Reset Link'}
           </button>
-
-          <div style={{ marginTop: '16px', textAlign: 'center' }}>
-  <Link to="/forgot-password" style={{ color: '#1cc29f', fontSize: '14px', textDecoration: 'none' }}>
-    Forgot Password?
-  </Link>
-</div>
         </form>
 
-        <p style={styles.footer}>
-          Don't have an account?{' '}
-          <Link to="/register" style={styles.link}>
-            Register here
+        <div style={styles.footer}>
+          <Link to="/login" style={styles.link}>
+            ← Back to Login
           </Link>
-        </p>
+        </div>
       </div>
     </div>
   );
@@ -118,19 +100,34 @@ const styles = {
     borderRadius: '8px',
     boxShadow: '0 2px 10px rgba(0,0,0,0.1)',
     width: '100%',
-    maxWidth: '450px'
+    maxWidth: '450px',
+    textAlign: 'center'
+  },
+  iconContainer: {
+    marginBottom: '20px'
+  },
+  icon: {
+    fontSize: '60px'
   },
   title: {
     margin: '0 0 10px 0',
     fontSize: '28px',
-    color: '#333',
-    textAlign: 'center'
+    color: '#333'
   },
   subtitle: {
     margin: '0 0 30px 0',
     fontSize: '14px',
     color: '#666',
-    textAlign: 'center'
+    lineHeight: '1.6'
+  },
+  successBox: {
+    padding: '12px',
+    backgroundColor: '#d4edda',
+    color: '#155724',
+    borderRadius: '4px',
+    marginBottom: '20px',
+    fontSize: '14px',
+    border: '1px solid #c3e6cb'
   },
   errorBox: {
     padding: '12px',
@@ -142,7 +139,8 @@ const styles = {
     border: '1px solid #fcc'
   },
   inputGroup: {
-    marginBottom: '20px'
+    marginBottom: '20px',
+    textAlign: 'left'
   },
   label: {
     display: 'block',
@@ -168,19 +166,17 @@ const styles = {
     borderRadius: '4px',
     fontSize: '16px',
     fontWeight: '600',
-    marginTop: '10px'
+    transition: 'background-color 0.3s'
   },
   footer: {
-    marginTop: '20px',
-    textAlign: 'center',
-    fontSize: '14px',
-    color: '#666'
+    marginTop: '20px'
   },
   link: {
     color: '#1cc29f',
     textDecoration: 'none',
+    fontSize: '14px',
     fontWeight: '600'
   }
 };
 
-export default Login;
+export default ForgotPassword;

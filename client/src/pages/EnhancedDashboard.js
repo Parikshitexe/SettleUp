@@ -162,7 +162,7 @@ function EnhancedDashboard() {
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <h1 style={styles.title}>SettleUp</h1>
+        <Link to="/" style={styles.title}>SettleUp</Link>
         <div style={styles.headerRight}>
           <NotificationBell />
           <UserDropdown user={user} onLogout={logout} />
@@ -365,7 +365,8 @@ const styles = {
     margin: 0,
     fontSize: '24px',
     color: '#1cc29f',
-    fontWeight: '700'
+    fontWeight: '700',
+    textDecoration: 'none'
   },
   headerRight: {
     display: 'flex',

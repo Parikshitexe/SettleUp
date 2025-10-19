@@ -13,8 +13,8 @@ function PaymentReminders() {
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [toast, setToast] = useState(null);
-  const [groups, setGroups] = useState([]); // NEW
-  const [groupMembers, setGroupMembers] = useState([]); // NEW
+  const [groups, setGroups] = useState([]);
+  const [groupMembers, setGroupMembers] = useState([]);
 
   const [formData, setFormData] = useState({
     groupId: '',
@@ -27,7 +27,7 @@ function PaymentReminders() {
 
   useEffect(() => {
     fetchReminders();
-    fetchGroups(); // NEW
+    fetchGroups();
   }, [activeTab]);
 
   const fetchReminders = async () => {
@@ -43,7 +43,6 @@ function PaymentReminders() {
     }
   };
 
-  // NEW: Fetch groups for dropdown
   const fetchGroups = async () => {
     try {
       const res = await axios.get('http://localhost:5000/api/groups');
@@ -53,7 +52,6 @@ function PaymentReminders() {
     }
   };
 
-  // NEW: When group is selected, get members
   const handleGroupChange = (e) => {
     const groupId = e.target.value;
     setFormData({ ...formData, groupId });
@@ -173,7 +171,7 @@ function PaymentReminders() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
+        <Link to="/" style={styles.title}>SettleUp</Link>
         <div style={styles.headerRight}>
           <NotificationBell />
           <UserDropdown user={user} onLogout={logout} />
@@ -305,13 +303,13 @@ function PaymentReminders() {
             onClick={() => setActiveTab('received')}
             style={{ ...styles.tab, ...(activeTab === 'received' ? styles.tabActive : {}) }}
           >
-            Reminders for You ({reminders.filter(r => r.to._id === user?._id).length})
+            Reminders for You ({reminders.filter(r => r.to?._id === user?._id).length})
           </button>
           <button
             onClick={() => setActiveTab('sent')}
             style={{ ...styles.tab, ...(activeTab === 'sent' ? styles.tabActive : {}) }}
           >
-            Reminders Sent ({reminders.filter(r => r.from._id === user?._id).length})
+            Reminders Sent ({reminders.filter(r => r.from?._id === user?._id).length})
           </button>
           <button
             onClick={() => setActiveTab('pending')}
@@ -329,6 +327,11 @@ function PaymentReminders() {
           ) : (
             <div style={styles.remindersList}>
               {reminders.map(reminder => {
+                // FIXED: Add null checks for deleted users/groups
+                const toUser = reminder.to?.name || 'Unknown User';
+                const fromUser = reminder.from?.name || 'Unknown User';
+                const groupName = reminder.group?.name || 'Deleted Group';
+                
                 const status = getStatusBadge(reminder);
                 const isSent = activeTab === 'sent';
 
@@ -343,11 +346,11 @@ function PaymentReminders() {
                           </div>
                           <div style={styles.reminderMeta}>
                             {isSent ? (
-                              <span>Reminder to {reminder.to.name}</span>
+                              <span>Reminder to {toUser}</span>
                             ) : (
-                              <span>From {reminder.from.name}</span>
+                              <span>From {fromUser}</span>
                             )}
-                            {' '} • {reminder.group.name}
+                            {' '} • {groupName}
                           </div>
                           {reminder.description && (
                             <div style={styles.reminderDesc}>

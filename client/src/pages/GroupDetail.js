@@ -7,7 +7,6 @@ import Toast from '../components/Toast';
 import UserDropdown from '../components/UserDropdown';
 import BudgetSettings from '../components/BudgetSettings';
 
-
 function GroupDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -20,11 +19,12 @@ function GroupDetail() {
   const [loading, setLoading] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [editingExpense, setEditingExpense] = useState(null);
   const [memberEmail, setMemberEmail] = useState('');
   const [error, setError] = useState('');
   const [activeTab, setActiveTab] = useState('expenses');
   const [toast, setToast] = useState(null);
-  
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -53,11 +53,8 @@ function GroupDetail() {
   });
 
   const [searchTerm, setSearchTerm] = useState('');
-const [filterCategory, setFilterCategory] = useState('All');
-const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
-
-
-  
+  const [filterCategory, setFilterCategory] = useState('All');
+  const [sortBy, setSortBy] = useState('date');
 
   const fetchGroup = useCallback(async () => {
     try {
@@ -99,7 +96,6 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     }
   }, [id]);
 
-  
   useEffect(() => {
     fetchGroup();
     fetchExpenses();
@@ -112,8 +108,7 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
       showToast('No expenses to export!');
       return;
     }
-  
-    // Prepare CSV data
+
     const headers = ['Date', 'Description', 'Category', 'Amount', 'Paid By', 'Split Type'];
     
     const rows = expenses.map(expense => [
@@ -124,22 +119,19 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
       expense.paidBy.name,
       expense.splitType
     ]);
-  
-    // Create CSV content
+
     let csvContent = headers.join(',') + '\n';
     rows.forEach(row => {
       csvContent += row.map(cell => `"${cell}"`).join(',') + '\n';
     });
-  
-    // Add summary
+
     const totalAmount = expenses.reduce((sum, exp) => sum + exp.amount, 0);
     csvContent += '\n';
     csvContent += `Total Expenses,${expenses.length}\n`;
     csvContent += `Total Amount,${totalAmount.toFixed(2)}\n`;
     csvContent += `Group Name,"${group.name}"\n`;
     csvContent += `Exported On,${new Date().toLocaleDateString()}\n`;
-  
-    // Download file
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
@@ -199,7 +191,7 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     const { name, value } = e.target;
     setExpenseForm({ ...expenseForm, [name]: value });
   };
-  
+
   const handleAmountBlur = () => {
     if (expenseForm.amount) {
       setExpenseForm({
@@ -208,7 +200,7 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
       });
     }
   };
-  
+
   const handleSplitTypeChange = (e) => {
     const newSplitType = e.target.value;
     setExpenseForm({ ...expenseForm, splitType: newSplitType });
@@ -247,6 +239,19 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     return (100 - allocated).toFixed(2);
   };
 
+  const resetExpenseForm = () => {
+    setExpenseForm({
+      description: '',
+      amount: '',
+      paidBy: user?.id || user?._id,
+      splitType: 'equal',
+      category: 'Other',
+      date: new Date().toISOString().split('T')[0]
+    });
+    setCustomSplits([]);
+    setError('');
+  };
+
   const handleAddExpense = async (e) => {
     e.preventDefault();
     setError('');
@@ -276,21 +281,88 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
 
       await axios.post('http://localhost:5000/api/expenses', expenseData);
 
-      setExpenseForm({
-        description: '',
-        amount: '',
-        paidBy: user?.id || user?._id,
-        splitType: 'equal',
-        category: 'Other',
-        date: new Date().toISOString().split('T')[0]
-      });
-      setCustomSplits([]);
+      resetExpenseForm();
       setShowAddExpense(false);
-
       await fetchExpenses();
       await fetchBalances();
+      showToast('Expense added successfully!');
     } catch (error) {
       setError(error.response?.data?.msg || 'Failed to add expense');
+    }
+  };
+
+  const openEditForm = (expense) => {
+    setEditingExpense(expense);
+    setExpenseForm({
+      description: expense.description,
+      amount: expense.amount.toString(),
+      paidBy: expense.paidBy._id,
+      splitType: expense.splitType,
+      category: expense.category,
+      date: new Date(expense.date).toISOString().split('T')[0]
+    });
+
+    if (expense.splitType === 'unequal') {
+      setCustomSplits(
+        expense.splitDetails.map(split => ({
+          userId: split.userId._id,
+          name: split.userId.name,
+          amount: split.amount.toString(),
+          percentage: ''
+        }))
+      );
+    } else if (expense.splitType === 'percentage') {
+      setCustomSplits(
+        expense.splitDetails.map(split => ({
+          userId: split.userId._id,
+          name: split.userId.name,
+          amount: '',
+          percentage: ((split.amount / expense.amount) * 100).toFixed(2)
+        }))
+      );
+    }
+
+    setShowEditExpense(true);
+    setShowAddExpense(false);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleEditExpense = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    try {
+      const expenseData = {
+        description: expenseForm.description,
+        amount: parseFloat(expenseForm.amount),
+        paidBy: expenseForm.paidBy,
+        splitType: expenseForm.splitType,
+        category: expenseForm.category,
+        date: expenseForm.date
+      };
+
+      if (expenseForm.splitType === 'unequal') {
+        expenseData.splitDetails = customSplits.map(split => ({
+          userId: split.userId,
+          amount: parseFloat(split.amount)
+        }));
+      } else if (expenseForm.splitType === 'percentage') {
+        expenseData.splitDetails = customSplits.map(split => ({
+          userId: split.userId,
+          percentage: parseFloat(split.percentage)
+        }));
+      }
+
+      await axios.put(`http://localhost:5000/api/expenses/${editingExpense._id}`, expenseData);
+
+      resetExpenseForm();
+      setShowEditExpense(false);
+      setEditingExpense(null);
+      await fetchExpenses();
+      await fetchBalances();
+      showToast('Expense updated successfully!');
+    } catch (error) {
+      setError(error.response?.data?.msg || 'Failed to update expense');
     }
   };
 
@@ -374,6 +446,31 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     }
   };
 
+  const getFilteredExpenses = () => {
+    let filtered = [...expenses];
+
+    if (searchTerm) {
+      filtered = filtered.filter(expense =>
+        expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        expense.paidBy.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (filterCategory !== 'All') {
+      filtered = filtered.filter(expense => expense.category === filterCategory);
+    }
+
+    if (sortBy === 'date') {
+      filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
+    } else if (sortBy === 'amount') {
+      filtered.sort((a, b) => b.amount - a.amount);
+    } else if (sortBy === 'description') {
+      filtered.sort((a, b) => a.description.localeCompare(b.description));
+    }
+
+    return filtered;
+  };
+
   if (loading) {
     return (
       <div style={styles.loadingContainer}>
@@ -397,7 +494,6 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
   const isAdmin = (() => {
     const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
     const currentUserId = (user?.id || user?._id)?.toString();
-    
     return creatorId === currentUserId;
   })();
 
@@ -405,43 +501,205 @@ const [sortBy, setSortBy] = useState('date'); // 'date', 'amount', 'description'
     b => b.userId.toString() === (user?.id || user?._id).toString()
   );
 
-  // Filter and search expenses
-const getFilteredExpenses = () => {
-  let filtered = [...expenses];
+  const filteredExpenses = getFilteredExpenses();
 
-  // Search by description or paid by name
-  if (searchTerm) {
-    filtered = filtered.filter(expense =>
-      expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      expense.paidBy.name.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-  }
+  // Render expense form (shared by Add and Edit)
+  const renderExpenseForm = (onSubmit, submitButtonText) => (
+    <form onSubmit={onSubmit}>
+      <div style={styles.formRow}>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Description *</label>
+          <input
+            type="text"
+            name="description"
+            placeholder="e.g., Dinner at restaurant"
+            value={expenseForm.description}
+            onChange={handleExpenseChange}
+            required
+            minLength="3"
+            maxLength="100"
+            style={styles.input}
+          />
+        </div>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Amount (₹) *</label>
+          <input
+            type="number"
+            name="amount"
+            placeholder="0"
+            value={expenseForm.amount}
+            onChange={handleExpenseChange}
+            onBlur={handleAmountBlur}
+            required
+            min="0.01"
+            step="0.01"
+            style={styles.input}
+          />
+        </div>
+      </div>
 
-  // Filter by category
-  if (filterCategory !== 'All') {
-    filtered = filtered.filter(expense => expense.category === filterCategory);
-  }
+      <div style={styles.formRow}>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Paid By *</label>
+          <select
+            name="paidBy"
+            value={expenseForm.paidBy}
+            onChange={handleExpenseChange}
+            required
+            style={styles.input}
+          >
+            {group.members.map(member => (
+              <option key={member._id} value={member._id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Category</label>
+          <select
+            name="category"
+            value={expenseForm.category}
+            onChange={handleExpenseChange}
+            style={styles.input}
+          >
+            <option value="Food">Food</option>
+            <option value="Transport">Transport</option>
+            <option value="Accommodation">Accommodation</option>
+            <option value="Entertainment">Entertainment</option>
+            <option value="Shopping">Shopping</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
 
-  // Sort
-  if (sortBy === 'date') {
-    filtered.sort((a, b) => new Date(b.date) - new Date(a.date));
-  } else if (sortBy === 'amount') {
-    filtered.sort((a, b) => b.amount - a.amount);
-  } else if (sortBy === 'description') {
-    filtered.sort((a, b) => a.description.localeCompare(b.description));
-  }
+      <div style={styles.formRow}>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Date</label>
+          <input
+            type="date"
+            name="date"
+            value={expenseForm.date}
+            onChange={handleExpenseChange}
+            max={new Date().toISOString().split('T')[0]}
+            min="2020-01-01"
+            style={styles.input}
+            required
+          />
+          <small style={styles.helpText}>You cannot select a future date.</small>
+        </div>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Split Type *</label>
+          <select
+            value={expenseForm.splitType}
+            onChange={handleSplitTypeChange}
+            style={styles.input}
+          >
+            <option value="equal">Equal Split</option>
+            <option value="unequal">Unequal (Custom Amounts)</option>
+            <option value="percentage">Percentage Split</option>
+          </select>
+        </div>
+      </div>
 
-  return filtered;
-};
+      {expenseForm.splitType === 'equal' && expenseForm.amount && (
+        <div style={styles.splitInfo}>
+          💡 Split equally: ₹{(parseFloat(expenseForm.amount) / group.members.length).toFixed(2)} per person
+        </div>
+      )}
 
-const filteredExpenses = getFilteredExpenses();
+      {expenseForm.splitType === 'unequal' && customSplits.length > 0 && (
+        <div style={styles.customSplitSection}>
+          <div style={styles.splitHeader}>
+            <label style={styles.label}>Custom Amounts</label>
+            <div style={styles.remainingAmount}>
+              Remaining: ₹{calculateRemainingAmount()}
+            </div>
+          </div>
+          {customSplits.map(split => (
+            <div key={split.userId} style={styles.splitRow}>
+              <span style={styles.splitName}>{split.name}</span>
+              <input
+                type="number"
+                placeholder="0.00"
+                value={split.amount}
+                onChange={(e) => handleCustomSplitChange(split.userId, 'amount', e.target.value)}
+                min="0"
+                step="0.01"
+                style={styles.splitInput}
+              />
+            </div>
+          ))}
+          <small style={styles.helpText}>
+            ⚠️ Total must equal ₹{expenseForm.amount || '0.00'}
+          </small>
+        </div>
+      )}
+
+      {expenseForm.splitType === 'percentage' && customSplits.length > 0 && (
+        <div style={styles.customSplitSection}>
+          <div style={styles.splitHeader}>
+            <label style={styles.label}>Split by Percentage</label>
+            <div style={styles.remainingAmount}>
+              Remaining: {calculateRemainingPercentage()}%
+            </div>
+          </div>
+          {customSplits.map(split => (
+            <div key={split.userId} style={styles.splitRow}>
+              <span style={styles.splitName}>{split.name}</span>
+              <div style={styles.percentageInput}>
+                <input
+                  type="number"
+                  placeholder="0"
+                  value={split.percentage}
+                  onChange={(e) => handleCustomSplitChange(split.userId, 'percentage', e.target.value)}
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  style={styles.splitInput}
+                />
+                <span style={styles.percentSymbol}>%</span>
+                {expenseForm.amount && (
+                  <span style={styles.amountPreview}>
+                    = ₹{((parseFloat(expenseForm.amount) * parseFloat(split.percentage || 0)) / 100).toFixed(2)}
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+          <small style={styles.helpText}>
+            ⚠️ Total must equal 100%
+          </small>
+        </div>
+      )}
+
+      <div style={{display: 'flex', gap: '12px'}}>
+        <button type="submit" style={styles.submitBtn}>
+          {submitButtonText}
+        </button>
+        {showEditExpense && (
+          <button 
+            type="button" 
+            onClick={() => {
+              setShowEditExpense(false);
+              setEditingExpense(null);
+              resetExpenseForm();
+            }}
+            style={{...styles.submitBtn, backgroundColor: '#6c757d'}}
+          >
+            Cancel
+          </button>
+        )}
+      </div>
+    </form>
+  );
 
   return (
     <div style={styles.container}>
-    <div style={styles.header}>
-      <Link to="/dashboard" style={styles.title}>SettleUp</Link>
-      <UserDropdown user={user} onLogout={logout} />
-    </div>
+      <div style={styles.header}>
+        <Link to="/" style={styles.title}>SettleUp</Link>
+        <UserDropdown user={user} onLogout={logout} />
+      </div>
 
       <div style={styles.content}>
         <div style={styles.backLink}>
@@ -557,23 +815,6 @@ const filteredExpenses = getFilteredExpenses();
                       <select
                         name="paidBy"
                         value={settlementForm.paidBy}
-                        onChange={handleSettlementChange}
-                        required
-                        style={styles.input}
-                      >
-                        <option value="">Select person</option>
-                        {group.members.map(member => (
-                          <option key={member._id} value={member._id}>
-                            {member.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Paid To? *</label>
-                      <select
-                        name="paidTo"
-                        value={settlementForm.paidTo}
                         onChange={handleSettlementChange}
                         required
                         style={styles.input}
@@ -726,467 +967,295 @@ const filteredExpenses = getFilteredExpenses();
                 <h3 style={styles.sectionTitle}>Expenses ({expenses.length})</h3>
                 <div style={styles.headerActions}>
                   <button
-                  onClick={handleExportCSV}
-                  style={styles.exportBtn}
-                  disabled={expenses.length === 0}
-                  > 📥 Export CSV </button>
-                <button 
-                  onClick={() => setShowAddExpense(!showAddExpense)} 
-                  style={styles.addBtn}
-                >
-                  {showAddExpense ? 'Cancel' : '+ Add Expense'}
-                </button>
+                    onClick={handleExportCSV}
+                    style={styles.exportBtn}
+                    disabled={expenses.length === 0}
+                  >
+                    📥 Export CSV
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setShowAddExpense(!showAddExpense);
+                      setShowEditExpense(false);
+                      setEditingExpense(null);
+                      resetExpenseForm();
+                    }} 
+                    style={styles.addBtn}
+                  >
+                    {showAddExpense ? 'Cancel' : '+ Add Expense'}
+                  </button>
+                </div>
               </div>
-              </div>
+
+              {/* Edit Expense Form */}
+              {showEditExpense && editingExpense && (
+                <div style={styles.addForm}>
+                  <h4 style={{...styles.sectionTitle, marginBottom: '16px'}}>✏️ Edit Expense</h4>
+                  {error && <div style={styles.errorBox}>{error}</div>}
+                  {renderExpenseForm(handleEditExpense, 'Update Expense')}
+                </div>
+              )}
 
               {/* Add Expense Form */}
-              {showAddExpense && (
+              {showAddExpense && !showEditExpense && (
                 <div style={styles.addForm}>
                   {error && <div style={styles.errorBox}>{error}</div>}
-                  <form onSubmit={handleAddExpense}>
-                    <div style={styles.formRow}>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Description *</label>
-                        <input
-                          type="text"
-                          name="description"
-                          placeholder="e.g., Dinner at restaurant"
-                          value={expenseForm.description}
-                          onChange={handleExpenseChange}
-                          required
-                          minLength="3"
-                          maxLength="100"
-                          style={styles.input}
-                        />
-                      </div>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Amount (₹) *</label>
-                        <input
-                          type="number"
-                          name="amount"
-                          placeholder="0"
-                          value={expenseForm.amount}
-                          onChange={handleExpenseChange}
-                          onBlur={handleAmountBlur}
-                          required
-                          min="0.01"
-                          step="0.01"
-                          style={styles.input}
-                        />
-                      </div>
-                    </div>
-
-                    <div style={styles.formRow}>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Paid By *</label>
-                        <select
-                          name="paidBy"
-                          value={expenseForm.paidBy}
-                          onChange={handleExpenseChange}
-                          required
-                          style={styles.input}
-                        >
-                          {group.members.map(member => (
-                            <option key={member._id} value={member._id}>
-                              {member.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Category</label>
-                        <select
-                          name="category"
-                          value={expenseForm.category}
-                          onChange={handleExpenseChange}
-                          style={styles.input}
-                        >
-                          <option value="Food">Food</option>
-                          <option value="Transport">Transport</option>
-                          <option value="Accommodation">Accommodation</option>
-                          <option value="Entertainment">Entertainment</option>
-                          <option value="Shopping">Shopping</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div style={styles.formRow}>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Date</label>
-                        <input
-                          type="date"
-                          name="date"
-                          value={expenseForm.date}
-                          onChange={handleExpenseChange}
-                          max={new Date().toISOString().split('T')[0]}
-                          min="2020-01-01"
-                          style={styles.input}
-                          required
-                        />
-                        <small style={styles.helpText}>You cannot select a future date.</small>
-                      </div>
-                      <div style={styles.formGroup}>
-                        <label style={styles.label}>Split Type *</label>
-                        <select
-                          value={expenseForm.splitType}
-                          onChange={handleSplitTypeChange}
-                          style={styles.input}
-                        >
-                          <option value="equal">Equal Split</option>
-                          <option value="unequal">Unequal (Custom Amounts)</option>
-                          <option value="percentage">Percentage Split</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {expenseForm.splitType === 'equal' && expenseForm.amount && (
-                      <div style={styles.splitInfo}>
-                        💡 Split equally: ₹{(parseFloat(expenseForm.amount) / group.members.length).toFixed(2)} per person
-                      </div>
-                    )}
-
-                    {expenseForm.splitType === 'unequal' && customSplits.length > 0 && (
-                      <div style={styles.customSplitSection}>
-                        <div style={styles.splitHeader}>
-                          <label style={styles.label}>Custom Amounts</label>
-                          <div style={styles.remainingAmount}>
-                            Remaining: ₹{calculateRemainingAmount()}
-                          </div>
-                        </div>
-                        {customSplits.map(split => (
-                          <div key={split.userId} style={styles.splitRow}>
-                            <span style={styles.splitName}>{split.name}</span>
-                            <input
-                              type="number"
-                              placeholder="0.00"
-                              value={split.amount}
-                              onChange={(e) => handleCustomSplitChange(split.userId, 'amount', e.target.value)}
-                              min="0"
-                              step="0.01"
-                              style={styles.splitInput}
-                            />
-                          </div>
-                        ))}
-                        <small style={styles.helpText}>
-                          ⚠️ Total must equal ₹{expenseForm.amount || '0.00'}
-                        </small>
-                      </div>
-                    )}
-
-                    {expenseForm.splitType === 'percentage' && customSplits.length > 0 && (
-                      <div style={styles.customSplitSection}>
-                        <div style={styles.splitHeader}>
-                          <label style={styles.label}>Split by Percentage</label>
-                          <div style={styles.remainingAmount}>
-                            Remaining: {calculateRemainingPercentage()}%
-                          </div>
-                        </div>
-                        {customSplits.map(split => (
-                          <div key={split.userId} style={styles.splitRow}>
-                            <span style={styles.splitName}>{split.name}</span>
-                            <div style={styles.percentageInput}>
-                              <input
-                                type="number"
-                                placeholder="0"
-                                value={split.percentage}
-                                onChange={(e) => handleCustomSplitChange(split.userId, 'percentage', e.target.value)}
-                                min="0"
-                                max="100"
-                                step="0.01"
-                                style={styles.splitInput}
-                              />
-                              <span style={styles.percentSymbol}>%</span>
-                              {expenseForm.amount && (
-                                <span style={styles.amountPreview}>
-                                  = ₹{((parseFloat(expenseForm.amount) * parseFloat(split.percentage || 0)) / 100).toFixed(2)}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                        <small style={styles.helpText}>
-                          ⚠️ Total must equal 100%
-                        </small>
-                      </div>
-                    )}
-
-                    <button type="submit" style={styles.submitBtn}>
-                      Add Expense
-                    </button>
-                  </form>
+                  {renderExpenseForm(handleAddExpense, 'Add Expense')}
                 </div>
               )}
 
               {/* Search and Filter */}
-<div style={styles.searchFilterContainer}>
-  <div style={styles.searchBox}>
-    <input
-      type="text"
-      placeholder="🔍 Search expenses..."
-      value={searchTerm}
-      onChange={(e) => setSearchTerm(e.target.value)}
-      style={styles.searchInput}
-    />
-    {searchTerm && (
-      <button
-        onClick={() => setSearchTerm('')}
-        style={styles.clearSearchBtn}
-      >
-        ✕
-      </button>
-    )}
-  </div>
+              <div style={styles.searchFilterContainer}>
+                <div style={styles.searchBox}>
+                  <input
+                    type="text"
+                    placeholder="🔍 Search expenses..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    style={styles.searchInput}
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      style={styles.clearSearchBtn}
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
 
-  <div style={styles.filterRow}>
-    <select
-      value={filterCategory}
-      onChange={(e) => setFilterCategory(e.target.value)}
-      style={styles.filterSelect}
-    >
-      <option value="All">All Categories</option>
-      <option value="Food">Food</option>
-      <option value="Transport">Transport</option>
-      <option value="Accommodation">Accommodation</option>
-      <option value="Entertainment">Entertainment</option>
-      <option value="Shopping">Shopping</option>
-      <option value="Other">Other</option>
-    </select>
+                <div style={styles.filterRow}>
+                  <select
+                    value={filterCategory}
+                    onChange={(e) => setFilterCategory(e.target.value)}
+                    style={styles.filterSelect}
+                  >
+                    <option value="All">All Categories</option>
+                    <option value="Food">Food</option>
+                    <option value="Transport">Transport</option>
+                    <option value="Accommodation">Accommodation</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Other">Other</option>
+                  </select>
 
-    <select
-      value={sortBy}
-      onChange={(e) => setSortBy(e.target.value)}
-      style={styles.filterSelect}
-    >
-      <option value="date">Sort by Date</option>
-      <option value="amount">Sort by Amount</option>
-      <option value="description">Sort by Name</option>
-    </select>
+                  <select
+                    value={sortBy}
+                    onChange={(e) => setSortBy(e.target.value)}
+                    style={styles.filterSelect}
+                  >
+                    <option value="date">Sort by Date</option>
+                    <option value="amount">Sort by Amount</option>
+                    <option value="description">Sort by Name</option>
+                  </select>
 
-    {(searchTerm || filterCategory !== 'All') && (
-      <button
-        onClick={() => {
-          setSearchTerm('');
-          setFilterCategory('All');
-        }}
-        style={styles.clearFiltersBtn}
-      >
-        Clear Filters
-      </button>
-    )}
-  </div>
+                  {(searchTerm || filterCategory !== 'All') && (
+                    <button
+                      onClick={() => {
+                        setSearchTerm('');
+                        setFilterCategory('All');
+                      }}
+                      style={styles.clearFiltersBtn}
+                    >
+                      Clear Filters
+                    </button>
+                  )}
+                </div>
 
-  <div style={styles.resultsInfo}>
-    Showing {filteredExpenses.length} of {expenses.length} expenses
-  </div>
-</div>
+                <div style={styles.resultsInfo}>
+                  Showing {filteredExpenses.length} of {expenses.length} expenses
+                </div>
+              </div>
 
               {/* Expenses List */}
               {expenses.length === 0 ? (
-  <div style={styles.emptyState}>
-    <p>No expenses yet. Add your first expense to get started!</p>
-  </div>
-) : filteredExpenses.length === 0 ? (
-  <div style={styles.emptyState}>
-    <p>No expenses match your filters. Try adjusting your search.</p>
-  </div>
-) : (
-  <div style={styles.expensesList}>
-    {filteredExpenses.map(expense => (
-      <div key={expense._id} style={styles.expenseCard}>
-        {/* Header */}
-        <div style={styles.expenseHeader}>
-          <div>
-            <h4 style={styles.expenseDescription}>{expense.description}</h4>
-            <div style={styles.expenseMeta}>
-              <span style={styles.expenseCategory}>{expense.category}</span>
-              <span style={styles.expenseDate}>
-                {new Date(expense.date).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
+                <div style={styles.emptyState}>
+                  <p>No expenses yet. Add your first expense to get started!</p>
+                </div>
+              ) : filteredExpenses.length === 0 ? (
+                <div style={styles.emptyState}>
+                  <p>No expenses match your filters. Try adjusting your search.</p>
+                </div>
+              ) : (
+                <div style={styles.expensesList}>
+                  {filteredExpenses.map(expense => {
+                    const expenseCreatorId = (expense.createdBy._id || expense.createdBy.id)?.toString();
+                    const currentUserId = (user?.id || user?._id)?.toString();
+                    const isExpenseCreator = expenseCreatorId === currentUserId;
+                    const canEdit = isExpenseCreator || isAdmin;
 
-          <div style={styles.expenseRight}>
-            <div style={styles.expenseAmount}>₹{expense.amount.toFixed(2)}</div>
-            <div style={styles.expensePaidBy}>
-              Paid by {expense.paidBy?.name || "Unknown"}
-            </div>
-          </div>
-        </div>
+                    return (
+                      <div key={expense._id} style={styles.expenseCard}>
+                        <div style={styles.expenseHeader}>
+                          <div>
+                            <h4 style={styles.expenseDescription}>{expense.description}</h4>
+                            <div style={styles.expenseMeta}>
+                              <span style={styles.expenseCategory}>{expense.category}</span>
+                              <span style={styles.expenseDate}>
+                                {new Date(expense.date).toLocaleDateString()}
+                              </span>
+                            </div>
+                          </div>
 
-        {/* Split Details */}
-        <div style={styles.expenseSplit}>
-          <div style={styles.splitLabel}>
-            {expense.splitType === "equal" && "Split equally:"}
-            {expense.splitType === "unequal" && "Custom split:"}
-            {expense.splitType === "percentage" && "Percentage split:"}
-          </div>
+                          <div style={styles.expenseRight}>
+                            <div style={styles.expenseAmount}>₹{expense.amount.toFixed(2)}</div>
+                            <div style={styles.expensePaidBy}>
+                              Paid by {expense.paidBy?.name || "Unknown"}
+                            </div>
+                          </div>
+                        </div>
 
-          <div style={styles.splitDetails}>
-            {expense.splitDetails?.map((split) => (
-              <span key={split.userId._id} style={styles.splitItem}>
-                {split.userId.name}: ₹{split.amount.toFixed(2)}
-              </span>
-            ))}
-          </div>
-        </div>
+                        <div style={styles.expenseSplit}>
+                          <div style={styles.splitLabel}>
+                            {expense.splitType === "equal" && "Split equally:"}
+                            {expense.splitType === "unequal" && "Custom split:"}
+                            {expense.splitType === "percentage" && "Percentage split:"}
+                          </div>
 
-        {/* Delete Button (Only for Creator/Admin) */}
-        {(() => {
-  // Get IDs safely
-  const expenseCreatorId = (expense.createdBy._id || expense.createdBy.id)?.toString();
-  const currentUserId = (user?.id || user?._id)?.toString();
-  
-  // Check if current user created this expense OR is group admin
-  const isExpenseCreator = expenseCreatorId === currentUserId;
-  const canDelete = isExpenseCreator || isAdmin;
-  
+                          <div style={styles.splitDetails}>
+                            {expense.splitDetails?.map((split) => (
+                              <span key={split.userId._id} style={styles.splitItem}>
+                                {split.userId.name}: ₹{split.amount.toFixed(2)}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
 
-  return canDelete && (
-    <button
-      onClick={() => handleDeleteExpense(expense._id)}
-      style={styles.deleteExpenseBtn}
-    >
-      Delete
-    </button>
-  );
-})()}
-      </div>
-    ))}
-  </div>
-)}
-
-</>
+                        {canEdit && (
+                          <div style={{display: 'flex', gap: '8px', marginTop: '12px'}}>
+                            <button
+                              onClick={() => openEditForm(expense)}
+                              style={{...styles.deleteExpenseBtn, backgroundColor: '#17a2b8'}}
+                            >
+                              ✏️ Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteExpense(expense._id)}
+                              style={styles.deleteExpenseBtn}
+                            >
+                              🗑️ Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
 
+          {/* ANALYTICS TAB */}
+          {activeTab === 'analytics' && (
+            <ExpenseAnalytics expenses={expenses} groupMembers={group.members} />
+          )}
+        </div>
 
-
-      {/* ANALYTICS TAB */}
-      {activeTab === 'analytics' && (
-        <ExpenseAnalytics expenses={expenses} groupMembers={group.members} />
-      )}
-    </div>
-
-    {/* Members Section */}
-    <div style={styles.section}>
-      <div style={styles.sectionHeader}>
-        <h3 style={styles.sectionTitle}>
-          👥 Members ({group.members.length})
-        </h3>
-        {group.members.some(m => 
-          (m._id || m.id)?.toString() === (user?.id || user?._id)?.toString()
-        ) && (
-          <button 
-            onClick={() => {
-              setShowAddMember(!showAddMember);
-              setError('');
-            }} 
-            style={styles.addBtn}
-          >
-            {showAddMember ? '✕ Cancel' : '+ Add Member'}
-          </button>
-        )}
-      </div>
-
-      {showAddMember && (
-        <div style={styles.addMemberForm}>
-          <h4 style={styles.addMemberTitle}>Add New Member</h4>
-          {error && <div style={styles.errorBox}>{error}</div>}
-          <form onSubmit={handleAddMember} style={styles.addMemberFormInner}>
-            <div style={styles.addMemberInputGroup}>
-              <input
-                type="email"
-                placeholder="Enter member's email address"
-                value={memberEmail}
-                onChange={(e) => setMemberEmail(e.target.value)}
-                required
-                pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
-                style={styles.addMemberInput}
-                autoFocus
-              />
-              <button type="submit" style={styles.addMemberSubmitBtn}>
-                Add Member
+        {/* Members Section */}
+        <div style={styles.section}>
+          <div style={styles.sectionHeader}>
+            <h3 style={styles.sectionTitle}>
+              👥 Members ({group.members.length})
+            </h3>
+            {group.members.some(m => 
+              (m._id || m.id)?.toString() === (user?.id || user?._id)?.toString()
+            ) && (
+              <button 
+                onClick={() => {
+                  setShowAddMember(!showAddMember);
+                  setError('');
+                }} 
+                style={styles.addBtn}
+              >
+                {showAddMember ? '✕ Cancel' : '+ Add Member'}
               </button>
-            </div>
-            <small style={styles.helpText}>
-              💡 The person must have a SettleUp account with this email
-            </small>
-          </form>
-        </div>
-      )}
-
-      <div style={styles.membersList}>
-      {group.members.map(member => {
-  // Safely extract IDs
-  const memberId = (member._id || member.id)?.toString();
-  const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
-  const currentUserId = (user?.id || user?._id)?.toString();
-
-  // Determine badges and permissions
-  const isCreator = memberId === creatorId;
-  const isCurrentUser = memberId === currentUserId;
-  
-  // ONLY ADMIN can remove members, and can't remove creator or themselves
-  const canRemove = isAdmin && !isCreator && memberId !== currentUserId;
-  
-  
-  return (
-    <div key={member._id} style={styles.memberCard}>
-      <div style={styles.memberInfo}>
-        <div style={styles.memberAvatar}>
-          {member.name.charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <div style={styles.memberName}>
-            {member.name}
-            {isCreator && (
-              <span style={styles.adminBadge}>ADMIN</span>
-            )}
-            {isCurrentUser && (
-              <span style={styles.youBadge}>YOU</span>
             )}
           </div>
-          <div style={styles.memberEmail}>{member.email}</div>
+
+          {showAddMember && (
+            <div style={styles.addMemberForm}>
+              <h4 style={styles.addMemberTitle}>Add New Member</h4>
+              {error && <div style={styles.errorBox}>{error}</div>}
+              <form onSubmit={handleAddMember} style={styles.addMemberFormInner}>
+                <div style={styles.addMemberInputGroup}>
+                  <input
+                    type="email"
+                    placeholder="Enter member's email address"
+                    value={memberEmail}
+                    onChange={(e) => setMemberEmail(e.target.value)}
+                    required
+                    pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+                    style={styles.addMemberInput}
+                    autoFocus
+                  />
+                  <button type="submit" style={styles.addMemberSubmitBtn}>
+                    Add Member
+                  </button>
+                </div>
+                <small style={styles.helpText}>
+                  💡 The person must have a SettleUp account with this email
+                </small>
+              </form>
+            </div>
+          )}
+
+          <div style={styles.membersList}>
+            {group.members.map(member => {
+              const memberId = (member._id || member.id)?.toString();
+              const creatorId = (group.createdBy._id || group.createdBy.id)?.toString();
+              const currentUserId = (user?.id || user?._id)?.toString();
+
+              const isCreator = memberId === creatorId;
+              const isCurrentUser = memberId === currentUserId;
+              const canRemove = isAdmin && !isCreator && memberId !== currentUserId;
+
+              return (
+                <div key={member._id} style={styles.memberCard}>
+                  <div style={styles.memberInfo}>
+                    <div style={styles.memberAvatar}>
+                      {member.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={styles.memberName}>
+                        {member.name}
+                        {isCreator && (
+                          <span style={styles.adminBadge}>ADMIN</span>
+                        )}
+                        {isCurrentUser && (
+                          <span style={styles.youBadge}>YOU</span>
+                        )}
+                      </div>
+                      <div style={styles.memberEmail}>{member.email}</div>
+                    </div>
+                  </div>
+                  {canRemove && (
+                    <button
+                      onClick={() => handleRemoveMember(member._id)}
+                      style={styles.removeBtn}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
+
+        {/* Toast Notification */}
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
-      {canRemove && (
-        <button
-          onClick={() => handleRemoveMember(member._id)}
-          style={styles.removeBtn}
-        >
-          Remove
-        </button>
-      )}
-    </div>
+    </div>    
   );
-})}
-      </div>
-    </div>
-    {/* Toast Notification */}
-    {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
-  </div>
-</div>    
-  );
-  
 }
 
 const styles = {
-
-  '@media (max-width: 768px)': {
-  formRow: {
-    gridTemplateColumns: '1fr',
-  },
-  statsGrid: {
-    gridTemplateColumns: '1fr',
-  }
-},
-
   headerActions: {
     display: 'flex',
     gap: '12px',
@@ -1267,439 +1336,433 @@ const styles = {
     fontStyle: 'italic'
   },
   container: {
-  minHeight: '100vh',
-  backgroundColor: '#f5f5f5'
+    minHeight: '100vh',
+    backgroundColor: '#f5f5f5'
   },
   header: {
-  backgroundColor: 'white',
-  padding: '20px 40px',
-  boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center'
+    backgroundColor: 'white',
+    padding: '20px 40px',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
   },
   title: {
-  margin: 0,
-  fontSize: '24px',
-  color: '#1cc29f',
-  fontWeight: '700',
-  textDecoration: 'none'
-  },
-  userName: {
-  fontSize: '16px',
-  color: '#333',
-  fontWeight: '500'
+    margin: 0,
+    fontSize: '24px',
+    color: '#1cc29f',
+    fontWeight: '700',
+    textDecoration: 'none'
   },
   content: {
-  padding: '40px',
-  maxWidth: '1000px',
-  margin: '0 auto'
+    padding: '40px',
+    maxWidth: '1000px',
+    margin: '0 auto'
   },
   backLink: {
-  marginBottom: '20px'
+    marginBottom: '20px'
   },
   link: {
-  color: '#1cc29f',
-  textDecoration: 'none',
-  fontSize: '16px',
-  fontWeight: '500'
+    color: '#1cc29f',
+    textDecoration: 'none',
+    fontSize: '16px',
+    fontWeight: '500'
   },
   groupHeader: {
-  backgroundColor: 'white',
-  padding: '30px',
-  borderRadius: '8px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  marginBottom: '20px',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start'
+    backgroundColor: 'white',
+    padding: '30px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    marginBottom: '20px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start'
   },
   groupName: {
-  margin: '0 0 10px 0',
-  fontSize: '32px',
-  color: '#333'
+    margin: '0 0 10px 0',
+    fontSize: '32px',
+    color: '#333'
   },
   groupDescription: {
-  margin: 0,
-  fontSize: '16px',
-  color: '#666'
+    margin: 0,
+    fontSize: '16px',
+    color: '#666'
   },
   deleteBtn: {
-  padding: '10px 20px',
-  backgroundColor: '#dc3545',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '14px',
-  fontWeight: '500'
+    padding: '10px 20px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
   },
   balanceCard: {
-  backgroundColor: 'white',
-  padding: '24px',
-  borderRadius: '8px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  marginBottom: '20px',
-  textAlign: 'center'
+    backgroundColor: 'white',
+    padding: '24px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    marginBottom: '20px',
+    textAlign: 'center'
   },
   balanceTitle: {
-  margin: '0 0 16px 0',
-  fontSize: '18px',
-  color: '#666',
-  fontWeight: '500'
+    margin: '0 0 16px 0',
+    fontSize: '18px',
+    color: '#666',
+    fontWeight: '500'
   },
   balanceAmount: {
-  fontSize: '32px',
-  fontWeight: '700',
-  marginBottom: '16px'
+    fontSize: '32px',
+    fontWeight: '700',
+    marginBottom: '16px'
   },
   settled: {
-  color: '#28a745'
+    color: '#28a745'
   },
   owed: {
-  color: '#28a745'
+    color: '#28a745'
   },
   owes: {
-  color: '#dc3545'
+    color: '#dc3545'
   },
   balanceDetails: {
-  display: 'flex',
-  justifyContent: 'center',
-  gap: '40px',
-  fontSize: '14px',
-  color: '#666'
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '40px',
+    fontSize: '14px',
+    color: '#666'
   },
   section: {
-  backgroundColor: 'white',
-  padding: '30px',
-  borderRadius: '8px',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-  marginBottom: '20px'
+    backgroundColor: 'white',
+    padding: '30px',
+    borderRadius: '8px',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    marginBottom: '20px'
   },
   sectionHeader: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '20px'
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '20px'
   },
   sectionTitle: {
-  margin: 0,
-  fontSize: '20px',
-  color: '#333'
+    margin: 0,
+    fontSize: '20px',
+    color: '#333'
   },
   addBtn: {
-  padding: '8px 16px',
-  backgroundColor: '#1cc29f',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '14px',
-  fontWeight: '500'
+    padding: '8px 16px',
+    backgroundColor: '#1cc29f',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '14px',
+    fontWeight: '500'
   },
   simplificationBanner: {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: '16px',
-  padding: '20px',
-  backgroundColor: '#e8f5e9',
-  border: '2px solid #4caf50',
-  borderRadius: '8px',
-  marginBottom: '24px'
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '16px',
+    padding: '20px',
+    backgroundColor: '#e8f5e9',
+    border: '2px solid #4caf50',
+    borderRadius: '8px',
+    marginBottom: '24px'
   },
   bannerIcon: {
-  fontSize: '32px'
+    fontSize: '32px'
   },
   bannerContent: {
-  flex: 1
+    flex: 1
   },
   bannerTitle: {
-  fontSize: '18px',
-  fontWeight: '700',
-  color: '#2e7d32',
-  marginBottom: '8px'
+    fontSize: '18px',
+    fontWeight: '700',
+    color: '#2e7d32',
+    marginBottom: '8px'
   },
   bannerText: {
-  fontSize: '14px',
-  color: '#1b5e20',
-  lineHeight: '1.6'
+    fontSize: '14px',
+    color: '#1b5e20',
+    lineHeight: '1.6'
   },
   bannerHighlight: {
-  display: 'inline-block',
-  marginTop: '8px',
-  padding: '4px 8px',
-  backgroundColor: '#4caf50',
-  color: 'white',
-  borderRadius: '4px',
-  fontSize: '13px',
-  fontWeight: '600'
+    display: 'inline-block',
+    marginTop: '8px',
+    padding: '4px 8px',
+    backgroundColor: '#4caf50',
+    color: 'white',
+    borderRadius: '4px',
+    fontSize: '13px',
+    fontWeight: '600'
   },
   transactionsContainer: {
-  marginBottom: '20px'
+    marginBottom: '20px'
   },
   transactionsHeader: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '16px'
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
   },
   transactionsTitle: {
-  margin: 0,
-  fontSize: '16px',
-  color: '#333',
-  fontWeight: '600'
+    margin: 0,
+    fontSize: '16px',
+    color: '#333',
+    fontWeight: '600'
   },
   transactionsBadge: {
-  padding: '6px 12px',
-  backgroundColor: '#1cc29f',
-  color: 'white',
-  borderRadius: '12px',
-  fontSize: '13px',
-  fontWeight: '600'
+    padding: '6px 12px',
+    backgroundColor: '#1cc29f',
+    color: 'white',
+    borderRadius: '12px',
+    fontSize: '13px',
+    fontWeight: '600'
   },
   transactionsList: {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px'
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
   },
   transactionCard: {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '16px',
-  backgroundColor: '#f8f9fa',
-  borderRadius: '6px',
-  gap: '12px'
+    display: 'flex',
+    alignItems: 'center',
+    padding: '16px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
+    gap: '12px'
   },
   transactionFrom: {
-  fontWeight: '600',
-  color: '#333',
-  flex: 1
+    fontWeight: '600',
+    color: '#333',
+    flex: 1
   },
   transactionArrow: {
-  color: '#1cc29f',
-  fontSize: '20px',
-  fontWeight: '700'
+    color: '#1cc29f',
+    fontSize: '20px',
+    fontWeight: '700'
   },
   transactionTo: {
-  fontWeight: '600',
-  color: '#333',
-  flex: 1
+    fontWeight: '600',
+    color: '#333',
+    flex: 1
   },
   transactionAmount: {
-  fontWeight: '700',
-  color: '#1cc29f',
-  fontSize: '18px'
+    fontWeight: '700',
+    color: '#1cc29f',
+    fontSize: '18px'
   },
   addForm: {
-  marginBottom: '24px',
-  padding: '24px',
-  backgroundColor: '#f8f9fa',
-  borderRadius: '6px'
+    marginBottom: '24px',
+    padding: '24px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px'
   },
   formRow: {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '16px',
-  marginBottom: '16px'
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '16px',
+    marginBottom: '16px'
   },
   formGroup: {
-  display: 'flex',
-  flexDirection: 'column'
+    display: 'flex',
+    flexDirection: 'column'
   },
   label: {
-  marginBottom: '6px',
-  fontSize: '14px',
-  fontWeight: '600',
-  color: '#333'
+    marginBottom: '6px',
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#333'
   },
   input: {
-  padding: '10px',
-  border: '1px solid #ddd',
-  borderRadius: '4px',
-  fontSize: '14px'
+    padding: '10px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '14px'
   },
   helpText: {
-  marginTop: '4px',
-  fontSize: '12px',
-  color: '#666'
+    marginTop: '4px',
+    fontSize: '12px',
+    color: '#666'
   },
   submitBtn: {
-  width: '100%',
-  padding: '12px',
-  backgroundColor: '#1cc29f',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '16px',
-  fontWeight: '600',
-  marginTop: '8px'
+    width: '100%',
+    padding: '12px',
+    backgroundColor: '#1cc29f',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '16px',
+    fontWeight: '600',
+    marginTop: '8px'
   },
   errorBox: {
-  padding: '10px',
-  backgroundColor: '#fee',
-  color: '#c33',
-  borderRadius: '4px',
-  marginBottom: '16px',
-  fontSize: '14px',
-  border: '1px solid #fcc'
+    padding: '10px',
+    backgroundColor: '#fee',
+    color: '#c33',
+    borderRadius: '4px',
+    marginBottom: '16px',
+    fontSize: '14px',
+    border: '1px solid #fcc'
   },
   splitInfo: {
-  padding: '12px',
-  backgroundColor: '#e8f5e9',
-  borderRadius: '4px',
-  fontSize: '14px',
-  color: '#2e7d32',
-  marginBottom: '16px',
-  textAlign: 'center'
+    padding: '12px',
+    backgroundColor: '#e8f5e9',
+    borderRadius: '4px',
+    fontSize: '14px',
+    color: '#2e7d32',
+    marginBottom: '16px',
+    textAlign: 'center'
   },
   customSplitSection: {
-  marginBottom: '20px',
-  padding: '16px',
-  backgroundColor: '#f8f9fa',
-  borderRadius: '6px',
-  border: '1px solid #dee2e6'
+    marginBottom: '20px',
+    padding: '16px',
+    backgroundColor: '#f8f9fa',
+    borderRadius: '6px',
+    border: '1px solid #dee2e6'
   },
   splitHeader: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '16px'
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '16px'
   },
   remainingAmount: {
-  fontSize: '14px',
-  fontWeight: '600',
-  color: '#1cc29f',
-  padding: '6px 12px',
-  backgroundColor: 'white',
-  borderRadius: '4px',
-  border: '1px solid #1cc29f'
+    fontSize: '14px',
+    fontWeight: '600',
+    color: '#1cc29f',
+    padding: '6px 12px',
+    backgroundColor: 'white',
+    borderRadius: '4px',
+    border: '1px solid #1cc29f'
   },
   splitRow: {
-  display: 'flex',
-  alignItems: 'center',
-  marginBottom: '12px',
-  gap: '12px'
+    display: 'flex',
+    alignItems: 'center',
+    marginBottom: '12px',
+    gap: '12px'
   },
   splitName: {
-  flex: '0 0 150px',
-  fontWeight: '500',
-  color: '#333'
+    flex: '0 0 150px',
+    fontWeight: '500',
+    color: '#333'
   },
   splitInput: {
-  flex: 1,
-  padding: '8px',
-  border: '1px solid #ddd',
-  borderRadius: '4px',
-  fontSize: '14px'
+    flex: 1,
+    padding: '8px',
+    border: '1px solid #ddd',
+    borderRadius: '4px',
+    fontSize: '14px'
   },
   percentageInput: {
-  flex: 1,
-  display: 'flex',
-  alignItems: 'center',
-  gap: '8px'
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
   },
   percentSymbol: {
-  fontWeight: '600',
-  color: '#666'
+    fontWeight: '600',
+    color: '#666'
   },
   amountPreview: {
-  fontSize: '13px',
-  color: '#666',
-  fontStyle: 'italic'
+    fontSize: '13px',
+    color: '#666',
+    fontStyle: 'italic'
   },
   quickSettlements: {
-  marginTop: '20px'
+    marginTop: '20px'
   },
   quickSettleLabel: {
-  fontSize: '14px',
-  color: '#666',
-  marginBottom: '12px',
-  fontWeight: '500'
+    fontSize: '14px',
+    color: '#666',
+    marginBottom: '12px',
+    fontWeight: '500'
   },
   quickSettleBtn: {
-  display: 'block',
-  width: '100%',
-  padding: '14px',
-  backgroundColor: '#fff',
-  border: '2px solid #1cc29f',
-  borderRadius: '6px',
-  color: '#1cc29f',
-  fontWeight: '600',
-  cursor: 'pointer',
-  marginBottom: '10px',
-  fontSize: '15px',
-  transition: 'all 0.3s'
+    display: 'block',
+    width: '100%',
+    padding: '14px',
+    backgroundColor: '#fff',
+    border: '2px solid #1cc29f',
+    borderRadius: '6px',
+    color: '#1cc29f',
+    fontWeight: '600',
+    cursor: 'pointer',
+    marginBottom: '10px',
+    fontSize: '15px',
+    transition: 'all 0.3s'
   },
   settlementsList: {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '12px'
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px'
   },
   settlementCard: {
-  padding: '20px',
-  border: '1px solid #e8f5e9',
-  borderRadius: '8px',
-  backgroundColor: '#f1f8f4'
+    padding: '20px',
+    border: '1px solid #e8f5e9',
+    borderRadius: '8px',
+    backgroundColor: '#f1f8f4'
   },
   settlementHeader: {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center'
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center'
   },
   settlementTransaction: {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '12px',
-  marginBottom: '8px'
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '8px'
   },
   settlementPaidBy: {
-  fontWeight: '600',
-  color: '#333',
-  fontSize: '16px'
+    fontWeight: '600',
+    color: '#333',
+    fontSize: '16px'
   },
   settlementArrow: {
-  color: '#28a745',
-  fontSize: '20px',
-  fontWeight: '700'
+    color: '#28a745',
+    fontSize: '20px',
+    fontWeight: '700'
   },
   settlementPaidTo: {
-  fontWeight: '600',
-  color: '#333',
-  fontSize: '16px'
+    fontWeight: '600',
+    color: '#333',
+    fontSize: '16px'
   },
   settlementMeta: {
-  display: 'flex',
-  gap: '12px',
-  fontSize: '13px'
+    display: 'flex',
+    gap: '12px',
+    fontSize: '13px'
   },
   settlementDate: {
-  color: '#666'
+    color: '#666'
   },
   settlementNote: {
-  color: '#1cc29f',
-  fontStyle: 'italic'
+    color: '#1cc29f',
+    fontStyle: 'italic'
   },
   settlementRight: {
-  textAlign: 'right'
+    textAlign: 'right'
   },
   settlementAmount: {
-  fontSize: '24px',
-  fontWeight: '700',
-  color: '#28a745',
-  marginBottom: '8px'
+    fontSize: '24px',
+    fontWeight: '700',
+    color: '#28a745',
+    marginBottom: '8px'
   },
   deleteSettlementBtn: {
-  padding: '6px 14px',
-  backgroundColor: '#dc3545',
-  color: 'white',
-  border: 'none',
-  borderRadius: '4px',
-  cursor: 'pointer',
-  fontSize: '13px',
-  fontWeight: '500'
+    padding: '6px 14px',
+    backgroundColor: '#dc3545',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    fontWeight: '500'
   },
-  // NEW STYLES FOR TABS
   tabContainer: {
   display: 'flex',
   gap: '8px',

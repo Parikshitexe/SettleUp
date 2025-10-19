@@ -34,17 +34,20 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Register user
-  const register = async (formData) => {
+  // Register user
+const register = async (formData) => {
     try {
+      console.log('Registering with data:', formData); // ADD THIS
       const res = await axios.post('http://localhost:5000/api/auth/register', formData);
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
       return { success: true };
     } catch (error) {
+      console.error('Registration error details:', error.response?.data); // ADD THIS
       return {
         success: false,
-        error: error.response?.data?.msg || 'Registration failed'
+        error: error.response?.data?.msg || error.response?.data?.errors?.[0]?.msg || 'Registration failed'
       };
     }
   };

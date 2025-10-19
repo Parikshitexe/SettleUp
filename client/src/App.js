@@ -10,15 +10,24 @@ import Friends from './pages/Friends';
 import PrivateRoute from './components/PrivateRoute';
 import PaymentReminders from './pages/PaymentReminders';
 import VerifyEmail from './pages/VerifyEmail';
+import LandingPage from './pages/LandingPage';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
+        
+  
           {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+  <Route path="/reset-password/:token" element={<ResetPassword />} />
+  <Route path="/verify-email" element={<VerifyEmail />} />
           
           {/* Protected Routes */}
           <Route

@@ -180,7 +180,7 @@ function Friends() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <Link to="/dashboard" style={styles.title}>SettleUp</Link>
+        <Link to="/" style={styles.title}>SettleUp</Link>
         <UserDropdown user={user} onLogout={logout} />
       </div>
 
