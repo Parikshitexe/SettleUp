@@ -250,4 +250,97 @@ router.delete('/:id', auth, async (req, res) => {
   }
 });
 
+// @route   PUT /api/expenses/:id
+// @desc    Update expense
+// @access  Private
+router.put('/:id', [
+  auth,
+  body('description', 'Description is required').optional().trim().notEmpty(),
+  body('amount', 'Amount must be greater than 0').optional().isFloat({ min: 0.01 }),
+  body('paidBy', 'Paid by user ID is required').optional().notEmpty(),
+  body('splitType', 'Split type is required').optional().isIn(['equal', 'unequal', 'percentage'])
+], async (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  try {
+    let expense = await Expense.findById(req.params.id);
+
+    if (!expense) {
+      return res.status(404).json({ msg: 'Expense not found' });
+    }
+
+    // Check authorization (creator or group admin)
+    const group = await Group.findById(expense.groupId);
+    const isCreator = expense.createdBy.toString() === req.user.id;
+    const isGroupAdmin = group.createdBy.toString() === req.user.id;
+
+    if (!isCreator && !isGroupAdmin) {
+      return res.status(401).json({ msg: 'Not authorized to edit this expense' });
+    }
+
+    const { description, amount, paidBy, splitType, category, date, splitDetails: customSplits } = req.body;
+
+    // Update fields if provided
+    if (description) expense.description = description;
+    if (amount) expense.amount = parseFloat(amount);
+    if (paidBy) expense.paidBy = paidBy;
+    if (splitType) expense.splitType = splitType;
+    if (category) expense.category = category;
+    if (date) expense.date = date;
+
+    // Recalculate split details if amount or splitType changed
+    if (amount || splitType) {
+      const finalAmount = amount ? parseFloat(amount) : expense.amount;
+      const finalSplitType = splitType || expense.splitType;
+
+      if (finalSplitType === 'equal') {
+        const splitAmount = parseFloat((finalAmount / group.members.length).toFixed(2));
+        const remainder = parseFloat((finalAmount - (splitAmount * group.members.length)).toFixed(2));
+
+        expense.splitDetails = group.members.map((member, index) => ({
+          userId: member,
+          amount: index === 0 ? splitAmount + remainder : splitAmount
+        }));
+      } else if (finalSplitType === 'unequal' && customSplits) {
+        const total = customSplits.reduce((sum, split) => sum + parseFloat(split.amount), 0);
+        if (Math.abs(total - finalAmount) > 0.01) {
+          return res.status(400).json({ msg: `Split amounts must equal total amount` });
+        }
+        expense.splitDetails = customSplits;
+      } else if (finalSplitType === 'percentage' && customSplits) {
+        expense.splitDetails = customSplits.map(split => ({
+          userId: split.userId,
+          amount: parseFloat(((finalAmount * split.percentage) / 100).toFixed(2))
+        }));
+      }
+    }
+
+    await expense.save();
+
+    // Check budgets
+    try {
+      await BudgetService.checkGroupBudget(expense.groupId);
+      await BudgetService.checkPersonalBudget(req.user.id);
+    } catch (error) {
+      console.error('Budget check error:', error);
+    }
+
+    const updatedExpense = await Expense.findById(expense._id)
+      .populate('paidBy', 'name email')
+      .populate('createdBy', 'name email')
+      .populate('splitDetails.userId', 'name email')
+      .lean();
+
+    res.json(updatedExpense);
+  } catch (error) {
+    console.error('Update expense error:', error.message);
+    if (error.kind === 'ObjectId') {
+      return res.status(404).json({ msg: 'Expense not found' });
+    }
+    res.status(500).send('Server error');
+  }
+});
 module.exports = router;
