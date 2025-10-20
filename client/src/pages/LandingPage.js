@@ -7,7 +7,7 @@ function LandingPage() {
       <nav style={styles.navbar}>
         <div style={styles.navContent}>
           <Link to="/" style={styles.logo}>
-            <span style={styles.logoIcon}>💰</span>
+          <img src="/favi.png" alt="SettleUp Logo" style={styles.logoImg} />
             SettleUp
           </Link>
           <div style={styles.navLinks}>
@@ -229,7 +229,7 @@ function LandingPage() {
         <div style={styles.footerContent}>
           <div style={styles.footerSection}>
             <div style={styles.footerLogo}>
-              <span style={styles.logoIcon}>💰</span>
+            <img src="/favi.png" alt="SettleUp Logo" style={styles.logoImg} />
               SettleUp
             </div>
             <p style={styles.footerDesc}>
@@ -299,6 +299,11 @@ const styles = {
   logoIcon: {
     fontSize: '28px'
   },
+  logoImg: {
+    width: '32px',
+    height: '32px',
+    objectFit: 'contain',
+  },  
   navLinks: {
     display: 'flex',
     alignItems: 'center',

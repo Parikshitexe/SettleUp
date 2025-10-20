@@ -52,7 +52,7 @@ function Login() {
             <input
               type="email"
               name="email"
-              placeholder="john@example.com"
+              placeholder="Enter your email"
               value={email}
               onChange={onChange}
               required
