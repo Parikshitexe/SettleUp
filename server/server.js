@@ -34,19 +34,9 @@ const startServer = async () => {
   try {
     await connectDB();
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on http://localhost:${PORT}`);
-      console.log('✅ Auth routes: /api/auth');
-      console.log('✅ Group routes: /api/groups');
-      console.log('✅ Expense routes: /api/expenses');
-      console.log('✅ Balance routes: /api/balances');
-      console.log('✅ Settlement routes: /api/settlements');
-      console.log('✅ User routes: /api/user');
-      console.log('✅ Friends routes: /api/friends');
-      console.log('✅ Notifications routes: /api/notifications');
-      console.log('✅ Payment Reminders routes: /api/payment-reminders');
-      console.log('✅ Budget routes: /api/budgets');
       
-      // NEW: Setup cron job for payment reminders
+      
+      
       cron.schedule('0 * * * *', () => {
         console.log('⏰ Running payment reminder processor...');
         processPaymentReminders();
@@ -58,5 +48,29 @@ const startServer = async () => {
     process.exit(1);
   }
 };
+
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? ['https://your-frontend-domain.vercel.app'] 
+    : ['http://localhost:3000'],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+
+const rateLimit = require('express-rate-limit');
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100 // limit each IP to 100 requests per windowMs
+});
+
+app.use('/api/', limiter);
+
+const helmet = require('helmet');
+app.use(helmet());
+
+const mongoSanitize = require('express-mongo-sanitize');
+app.use(mongoSanitize());
 
 startServer();

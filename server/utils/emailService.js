@@ -109,17 +109,17 @@ const sendOTPEmail = async (email, name, otp) => {
 
   try {
     await transporter.sendMail(mailOptions);
-    console.log(`OTP email sent to ${email}`);
+   
     return true;
   } catch (error) {
-    console.error('Error sending email:', error);
+    
     throw error;
   }
 };
 
 // Send Password Reset Email
 const sendPasswordResetEmail = async (email, name, resetToken) => {
-  const resetUrl = `http://localhost:3000/reset-password/${resetToken}`; // FIXED: Changed to 3000
+    const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
   
   const mailOptions = {
     from: process.env.EMAIL_FROM,

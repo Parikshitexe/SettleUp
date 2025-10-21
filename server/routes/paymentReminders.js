@@ -90,7 +90,6 @@ router.post('/', [
     const { groupId, to, amount, reminderType = 'one_time', description = '', dueDate } = req.body;
     const from = req.user.id;
 
-    console.log('Creating reminder:', { groupId, to, from, amount });
 
     // Validate group exists
     const group = await Group.findById(groupId).populate('members', 'name email');
@@ -132,9 +131,8 @@ router.post('/', [
     });
 
     await reminder.save();
-    console.log('Reminder saved:', reminder._id);
+    
 
-    // Create notification separately - don't let it crash the request
     try {
       const fromUser = await User.findById(from);
       
@@ -148,7 +146,7 @@ router.post('/', [
         actionUrl: `/groups/${groupId}`,
         read: false
       });
-      console.log('Notification created');
+      
     } catch (notifError) {
       console.error('Notification error (non-critical):', notifError.message);
     }

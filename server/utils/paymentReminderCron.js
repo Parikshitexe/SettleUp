@@ -17,7 +17,7 @@ const processPaymentReminders = async () => {
       .populate('to', 'name')
       .populate('group', 'name');
 
-    console.log(`Processing ${remindersDue.length} payment reminders...`);
+    
 
     for (const reminder of remindersDue) {
       try {
