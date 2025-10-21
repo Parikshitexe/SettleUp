@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
+import config from '../config';
 
 function ResetPassword() {
   const { token } = useParams();
@@ -20,7 +21,7 @@ function ResetPassword() {
 
   const verifyToken = async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/auth/verify-reset-token/${token}`);
+      const res = await axios.get(`${config.API_URL}/api/auth/verify-reset-token/${token}`);
       if (res.data.valid) {
         setTokenValid(true);
       }
@@ -50,7 +51,7 @@ function ResetPassword() {
     setLoading(true);
 
     try {
-      const res = await axios.post(`http://localhost:5000/api/auth/reset-password/${token}`, { password });
+      const res = await axios.post(`${config.API_URL}/api/auth/reset-password/${token}`, { password });
       setMessage(res.data.msg);
       setTimeout(() => {
         navigate('/login');

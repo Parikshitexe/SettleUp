@@ -2,6 +2,7 @@ import { useState, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
+import config from '../config';
 
 function VerifyEmail() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
@@ -62,7 +63,7 @@ function VerifyEmail() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(
-        'http://localhost:5000/api/auth/verify-otp',
+        `${config.API_URL}/api/auth/verify-otp`,
         { otp: otpString },
         { headers: { 'x-auth-token': token } }
       );
@@ -85,7 +86,7 @@ function VerifyEmail() {
     try {
       const token = localStorage.getItem('token');
       const res = await axios.post(
-        'http://localhost:5000/api/auth/resend-otp',
+        `${config.API_URL}/api/auth/resend-otp`,
         {},
         { headers: { 'x-auth-token': token } }
       );

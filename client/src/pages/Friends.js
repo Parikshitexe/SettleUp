@@ -4,6 +4,7 @@ import axios from 'axios';
 import AuthContext from '../context/AuthContext';
 import UserDropdown from '../components/UserDropdown';
 import Toast from '../components/Toast';
+import config from '../config';
 
 function Friends() {
   const { user, logout } = useContext(AuthContext);
@@ -24,9 +25,9 @@ function Friends() {
   const fetchData = async () => {
     try {
       const [friendsRes, balancesRes, requestsRes] = await Promise.all([
-        axios.get('http://localhost:5000/api/friends'),
-        axios.get('http://localhost:5000/api/friends/balances'),
-        axios.get('http://localhost:5000/api/friends/requests')
+        axios.get(`${config.API_URL}/api/friends`),
+        axios.get(`${config.API_URL}/api/friends/balances`),
+        axios.get(`${config.API_URL}/api/friends/requests`)
       ]);
 
       setFriends(friendsRes.data);
@@ -52,7 +53,7 @@ function Friends() {
 
     setSearching(true);
     try {
-      const res = await axios.get(`http://localhost:5000/api/user/search?query=${searchQuery}`);
+      const res = await axios.get(`${config.API_URL}/api/user/search?query=${searchQuery}`);
       setSearchResults(res.data);
       if (res.data.length === 0) {
         showToast('No users found', 'info');
@@ -65,7 +66,7 @@ function Friends() {
 
   const handleSendRequest = async (userId) => {
     try {
-      await axios.post(`http://localhost:5000/api/friends/request/${userId}`);
+      await axios.post(`${config.API_URL}/api/friends/request/${userId}`);
       showToast('Friend request sent!');
       await fetchData();
       setSearchResults([]);
@@ -77,7 +78,7 @@ function Friends() {
 
   const handleAcceptRequest = async (requestId) => {
     try {
-      await axios.put(`http://localhost:5000/api/friends/request/${requestId}/accept`);
+      await axios.put(`${config.API_URL}/api/friends/request/${requestId}/accept`);
       showToast('Friend request accepted!');
       await fetchData();
     } catch (error) {
@@ -87,7 +88,7 @@ function Friends() {
 
   const handleRejectRequest = async (requestId) => {
     try {
-      await axios.put(`http://localhost:5000/api/friends/request/${requestId}/reject`);
+      await axios.put(`${config.API_URL}/api/friends/request/${requestId}/reject`);
       showToast('Friend request rejected');
       await fetchData();
     } catch (error) {
@@ -97,7 +98,7 @@ function Friends() {
 
   const handleCancelRequest = async (requestId) => {
     try {
-      await axios.delete(`http://localhost:5000/api/friends/request/${requestId}`);
+      await axios.delete(`${config.API_URL}/api/friends/request/${requestId}`);
       showToast('Friend request cancelled');
       await fetchData();
     } catch (error) {
@@ -111,7 +112,7 @@ function Friends() {
     }
 
     try {
-      await axios.delete(`http://localhost:5000/api/friends/${friendId}`);
+      await axios.delete(`${config.API_URL}/api/friends/${friendId}`);
       showToast('Friend removed');
       await fetchData();
     } catch (error) {

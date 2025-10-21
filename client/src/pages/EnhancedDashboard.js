@@ -4,6 +4,7 @@ import AuthContext from '../context/AuthContext';
 import UserDropdown from '../components/UserDropdown';
 import NotificationBell from '../components/NotificationBell';
 import axios from 'axios';
+import config from '../config';
 
 function EnhancedDashboard() {
   const { user, logout } = useContext(AuthContext);
@@ -31,7 +32,7 @@ function EnhancedDashboard() {
   const fetchDashboardData = async () => {
     try {
       // Fetch groups
-      const groupsRes = await axios.get('http://localhost:5000/api/groups');
+      const groupsRes = await axios.get(`${config.API_URL}/api/groups`);
       const groupsData = groupsRes.data;
       setGroups(groupsData);
 
@@ -41,14 +42,14 @@ function EnhancedDashboard() {
 
       for (const group of groupsData) {
         try {
-          const expRes = await axios.get(`http://localhost:5000/api/expenses/group/${group._id}`);
+          const expRes = await axios.get(`${config.API_URL}/api/expenses/group/${group._id}`);
           allExpenses.push(...expRes.data);
         } catch (err) {
           console.error(`Failed to fetch expenses for group ${group._id}`);
         }
 
         try {
-          const settRes = await axios.get(`http://localhost:5000/api/settlements/group/${group._id}`);
+          const settRes = await axios.get(`${config.API_URL}/api/settlements/group/${group._id}`);
           allSettlements.push(...settRes.data);
         } catch (err) {
           console.error(`Failed to fetch settlements for group ${group._id}`);
@@ -60,14 +61,14 @@ function EnhancedDashboard() {
       let friendBalancesData = [];
 
       try {
-        const friendsRes = await axios.get('http://localhost:5000/api/friends');
+        const friendsRes = await axios.get(`${config.API_URL}/api/friends`);
         friendsData = friendsRes.data;
       } catch (err) {
         console.error('Failed to fetch friends');
       }
 
       try {
-        const balancesRes = await axios.get('http://localhost:5000/api/friends/balances');
+        const balancesRes = await axios.get(`${config.API_URL}/api/friends/balances`);
         friendBalancesData = balancesRes.data;
       } catch (err) {
         console.error('Failed to fetch friend balances');

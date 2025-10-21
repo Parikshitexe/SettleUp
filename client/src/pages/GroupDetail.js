@@ -6,6 +6,7 @@ import ExpenseAnalytics from '../components/ExpenseAnalytics';
 import Toast from '../components/Toast';
 import UserDropdown from '../components/UserDropdown';
 import BudgetSettings from '../components/BudgetSettings';
+import config from '../config';
 
 function GroupDetail() {
   const { id } = useParams();
@@ -58,7 +59,7 @@ function GroupDetail() {
 
   const fetchGroup = useCallback(async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/groups/${id}`);
+      const res = await axios.get(`${config.API_URL}/api/groups/${id}`);
       setGroup(res.data);
       setExpenseForm(prev => ({ ...prev, paidBy: user?.id || user?._id }));
       setLoading(false);
@@ -71,7 +72,7 @@ function GroupDetail() {
 
   const fetchExpenses = useCallback(async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/expenses/group/${id}`);
+      const res = await axios.get(`${config.API_URL}/api/expenses/group/${id}`);
       setExpenses(res.data);
     } catch (error) {
       console.error('Fetch expenses error:', error);
@@ -80,7 +81,7 @@ function GroupDetail() {
 
   const fetchBalances = useCallback(async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/balances/group/${id}`);
+      const res = await axios.get(`${config.API_URL}/api/balances/group/${id}`);
       setBalances(res.data);
     } catch (error) {
       console.error('Fetch balances error:', error);
@@ -89,7 +90,7 @@ function GroupDetail() {
 
   const fetchSettlements = useCallback(async () => {
     try {
-      const res = await axios.get(`http://localhost:5000/api/settlements/group/${id}`);
+      const res = await axios.get(`${config.API_URL}/api/settlements/group/${id}`);
       setSettlements(res.data);
     } catch (error) {
       console.error('Fetch settlements error:', error);
@@ -150,7 +151,7 @@ function GroupDetail() {
     setError('');
 
     try {
-      const res = await axios.post(`http://localhost:5000/api/groups/${id}/members`, {
+      const res = await axios.post(`${config.API_URL}/api/groups/${id}/members`, {
         memberEmails: [memberEmail.trim()]
       });
       setGroup(res.data);
@@ -167,7 +168,7 @@ function GroupDetail() {
     }
 
     try {
-      const res = await axios.delete(`http://localhost:5000/api/groups/${id}/members/${memberId}`);
+      const res = await axios.delete(`${config.API_URL}/api/groups/${id}/members/${memberId}`);
       setGroup(res.data);
     } catch (error) {
       showToast(error.response?.data?.msg || 'Failed to remove member');
@@ -180,7 +181,7 @@ function GroupDetail() {
     }
 
     try {
-      await axios.delete(`http://localhost:5000/api/groups/${id}`);
+      await axios.delete(`${config.API_URL}/api/groups/${id}`);
       navigate('/dashboard');
     } catch (error) {
       showToast(error.response?.data?.msg || 'Failed to delete group');
@@ -279,7 +280,7 @@ function GroupDetail() {
         }));
       }
 
-      await axios.post('http://localhost:5000/api/expenses', expenseData);
+      await axios.post(`${config.API_URL}/api/expenses`, expenseData);
 
       resetExpenseForm();
       setShowAddExpense(false);
@@ -353,7 +354,7 @@ function GroupDetail() {
         }));
       }
 
-      await axios.put(`http://localhost:5000/api/expenses/${editingExpense._id}`, expenseData);
+      await axios.put(`${config.API_URL}/api/expenses/${editingExpense._id}`, expenseData);
 
       resetExpenseForm();
       setShowEditExpense(false);
@@ -372,7 +373,7 @@ function GroupDetail() {
     }
 
     try {
-      await axios.delete(`http://localhost:5000/api/expenses/${expenseId}`);
+      await axios.delete(`${config.API_URL}/api/expenses/${expenseId}`);
       await fetchExpenses();
       await fetchBalances();
       showToast('Expense deleted successfully!');
@@ -406,7 +407,7 @@ function GroupDetail() {
     }
 
     try {
-      await axios.post('http://localhost:5000/api/settlements', {
+      await axios.post(`${config.API_URL}/api/settlements`, {
         groupId: id,
         paidBy: settlementForm.paidBy,
         paidTo: settlementForm.paidTo,
@@ -438,7 +439,7 @@ function GroupDetail() {
     }
 
     try {
-      await axios.delete(`http://localhost:5000/api/settlements/${settlementId}`);
+      await axios.delete(`${config.API_URL}/api/settlements/${settlementId}`);
       await fetchSettlements();
       await fetchBalances();
     } catch (error) {

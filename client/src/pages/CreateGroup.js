@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import axios from 'axios';
 import AuthContext from '../context/AuthContext';
 import UserDropdown from '../components/UserDropdown';
+import config from '../config';
 
 function CreateGroup() {
   const [formData, setFormData] = useState({
@@ -33,7 +34,7 @@ function CreateGroup() {
         .map(email => email.trim())
         .filter(email => email !== '');
 
-      const res = await axios.post('http://localhost:5000/api/groups', {
+      const res = await axios.post(`${config.API_URL}/api/groups`, {
         name,
         description,
         memberEmails: memberEmailsArray

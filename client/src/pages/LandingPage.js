@@ -1,16 +1,17 @@
 import { Link } from 'react-router-dom';
+import '../styles/LandingPage.css';
 
 function LandingPage() {
   return (
     <div style={styles.container}>
       {/* Navigation Bar */}
-      <nav style={styles.navbar}>
-        <div style={styles.navContent}>
-          <Link to="/" style={styles.logo}>
+      <nav style={styles.navbar} className='navbar'>
+        <div style={styles.navContent} className='nav-content'>
+          <Link to="/" style={styles.logo} className='logo'>
           <img src="/favi.png" alt="SettleUp Logo" style={styles.logoImg} />
             SettleUp
           </Link>
-          <div style={styles.navLinks}>
+          <div style={styles.navLinks} className='nav-links'>
             <a href="#features" style={styles.navLink}>Features</a>
             <a href="#how-it-works" style={styles.navLink}>How It Works</a>
             <a href="#pricing" style={styles.navLink}>Pricing</a>
@@ -21,17 +22,17 @@ function LandingPage() {
       </nav>
 
       {/* Hero Section */}
-      <section style={styles.hero}>
-        <div style={styles.heroContent}>
-          <h1 style={styles.heroTitle}>
+      <section style={styles.hero} className='hero'>
+        <div style={styles.heroContent} className='hero-content'>
+          <h1 style={styles.heroTitle} className='hero-title'>
             Split Bills & Track Expenses
             <br />
             <span style={styles.heroTitleAccent}>The Smart Way</span>
           </h1>
-          <p style={styles.heroSubtitle}>
+          <p style={styles.heroSubtitle} className='hero-subtitle'>
             Stop the awkward money conversations. SettleUp makes splitting expenses with friends, roommates, and groups effortless.
           </p>
-          <div style={styles.heroButtons}>
+          <div style={styles.heroButtons} className='hero-buttons'>
             <Link to="/register" style={styles.ctaButton}>
               Start Free Today →
             </Link>
@@ -47,7 +48,7 @@ function LandingPage() {
             
           </div>
         </div>
-        <div style={styles.heroImage}>
+        <div style={styles.heroImage} className='hero-image'>
           <div style={styles.mockup}>
             <div style={styles.mockupScreen}>
               <div style={styles.mockupHeader}>
@@ -76,12 +77,12 @@ function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" style={styles.features}>
-        <div style={styles.sectionContent}>
-          <h2 style={styles.sectionTitle}>Everything You Need to Split Smart</h2>
+      <section id="features" style={styles.features} className='features'>
+        <div style={styles.sectionContent} className='section-content'>
+          <h2 style={styles.sectionTitle} className='section-title'>Everything You Need to Split Smart</h2>
           <p style={styles.sectionSubtitle}>Powerful features that make expense tracking effortless</p>
           
-          <div style={styles.featureGrid}>
+          <div style={styles.featureGrid} className='feature-grid'>
             <div style={styles.featureCard}>
               <div style={styles.featureIcon}>👥</div>
               <h3 style={styles.featureTitle}>Group Expenses</h3>
@@ -200,8 +201,8 @@ function LandingPage() {
       </section>
 
       {/* Coming Soon Section */}
-<section style={styles.testimonials}>
-  <div style={styles.sectionContentNew}>
+<section style={styles.testimonials} className='testimonials'>
+  <div style={styles.sectionContentNew} className='section-content'>
     <h2 style={styles.sectionTitle}>We’re Just Getting Started</h2>
     <p style={styles.testimonialText}>
       Join us early and help shape the next generation of expense-sharing tools.
@@ -225,8 +226,8 @@ function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer style={styles.footer}>
-        <div style={styles.footerContent}>
+      <footer style={styles.footer} className='footer'>
+        <div style={styles.footerContent} className='footer-content'>
           <div style={styles.footerSection}>
             <div style={styles.footerLogo}>
             <img src="/favi.png" alt="SettleUp Logo" style={styles.logoImg} />
@@ -246,19 +247,15 @@ function LandingPage() {
 
           <div style={styles.footerSection}>
             <h4 style={styles.footerTitle}>Company</h4>
-            <a href="#" style={styles.footerLink}>About Us</a>
-            <a href="#" style={styles.footerLink}>Contact</a>
-            <a href="#" style={styles.footerLink}>Blog</a>
+            <a href="/" style={styles.footerLink}>About Us</a>
+            <a href="/" style={styles.footerLink}>Contact</a>
+            
           </div>
 
-          <div style={styles.footerSection}>
-            <h4 style={styles.footerTitle}>Legal</h4>
-            <a href="#" style={styles.footerLink}>Privacy Policy</a>
-            <a href="#" style={styles.footerLink}>Terms of Service</a>
-          </div>
+          
         </div>
         <div style={styles.footerBottom}>
-          <p>© 2024 SettleUp. All rights reserved.</p>
+          <p>© 2025 SettleUp. All rights reserved.</p>
         </div>
       </footer>
     </div>

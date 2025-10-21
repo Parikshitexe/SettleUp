@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import config from '../config';
 
 function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
@@ -31,7 +32,7 @@ function NotificationBell() {
 
   const fetchNotifications = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/notifications?limit=10');
+      const res = await axios.get(`${config.API_URL}/api/notifications?limit=10`);
       setNotifications(res.data.notifications);
       setUnreadCount(res.data.unreadCount);
     } catch (error) {
@@ -42,7 +43,7 @@ function NotificationBell() {
   const handleNotificationClick = async (notification) => {
     if (!notification.read) {
       try {
-        await axios.put(`http://localhost:5000/api/notifications/${notification._id}/read`);
+        await axios.put(`${config.API_URL}/api/notifications/${notification._id}/read`);
         
         // Update local state
         setNotifications(prev =>
@@ -64,7 +65,7 @@ function NotificationBell() {
 
   const handleMarkAllRead = async () => {
     try {
-      await axios.put('http://localhost:5000/api/notifications/mark-all-read');
+      await axios.put(`${config.API_URL}/api/notifications/mark-all-read`);
       setNotifications(prev =>
         prev.map(n => ({ ...n, read: true }))
       );
@@ -77,7 +78,7 @@ function NotificationBell() {
   const handleDeleteNotification = async (e, notificationId) => {
     e.stopPropagation();
     try {
-      await axios.delete(`http://localhost:5000/api/notifications/${notificationId}`);
+      await axios.delete(`${config.API_URL}/api/notifications/${notificationId}`);
       setNotifications(prev => prev.filter(n => n._id !== notificationId));
       setUnreadCount(prev => {
         const deleted = notifications.find(n => n._id === notificationId);

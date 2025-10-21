@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import config from '../config';
 
 const AuthContext = createContext();
 
@@ -22,7 +23,7 @@ export const AuthProvider = ({ children }) => {
   // Load user data
   const loadUser = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/auth/user');
+      const res = await axios.get(`${config.API_URL}/api/auth/user`);
       setUser(res.data);
       setLoading(false);
     } catch (error) {
@@ -34,17 +35,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Register user
-  // Register user
-const register = async (formData) => {
+  const register = async (formData) => {
     try {
-      console.log('Registering with data:', formData); // ADD THIS
-      const res = await axios.post('http://localhost:5000/api/auth/register', formData);
+      
+      const res = await axios.post(`${config.API_URL}/api/auth/register`, formData);
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
       return { success: true };
     } catch (error) {
-      console.error('Registration error details:', error.response?.data); // ADD THIS
+      console.error('Registration error details:', error.response?.data);
       return {
         success: false,
         error: error.response?.data?.msg || error.response?.data?.errors?.[0]?.msg || 'Registration failed'
@@ -55,7 +55,7 @@ const register = async (formData) => {
   // Login user
   const login = async (formData) => {
     try {
-      const res = await axios.post('http://localhost:5000/api/auth/login', formData);
+      const res = await axios.post(`${config.API_URL}/api/auth/login`, formData);
       localStorage.setItem('token', res.data.token);
       setToken(res.data.token);
       setUser(res.data.user);
@@ -75,10 +75,10 @@ const register = async (formData) => {
     setUser(null);
   };
 
-  // NEW: Update user profile
+  // Update user profile
   const updateProfile = async (profileData) => {
     try {
-      const res = await axios.put('http://localhost:5000/api/user/profile', profileData);
+      const res = await axios.put(`${config.API_URL}/api/user/profile`, profileData);
       setUser(res.data);
       return { success: true };
     } catch (error) {
@@ -89,10 +89,10 @@ const register = async (formData) => {
     }
   };
 
-  // NEW: Change password
+  // Change password
   const changePassword = async (passwordData) => {
     try {
-      await axios.put('http://localhost:5000/api/user/change-password', passwordData);
+      await axios.put(`${config.API_URL}/api/user/change-password`, passwordData);
       return { success: true };
     } catch (error) {
       return {

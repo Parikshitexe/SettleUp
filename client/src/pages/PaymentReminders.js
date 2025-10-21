@@ -5,6 +5,7 @@ import AuthContext from '../context/AuthContext';
 import UserDropdown from '../components/UserDropdown';
 import NotificationBell from '../components/NotificationBell';
 import Toast from '../components/Toast';
+import config from '../config';
 
 function PaymentReminders() {
   const { user, logout } = useContext(AuthContext);
@@ -33,7 +34,7 @@ function PaymentReminders() {
   const fetchReminders = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`http://localhost:5000/api/payment-reminders?type=${activeTab}`);
+      const res = await axios.get(`${config.API_URL}/api/payment-reminders?type=${activeTab}`);
       setReminders(res.data);
       setLoading(false);
     } catch (error) {
@@ -45,7 +46,7 @@ function PaymentReminders() {
 
   const fetchGroups = async () => {
     try {
-      const res = await axios.get('http://localhost:5000/api/groups');
+      const res = await axios.get(`${config.API_URL}/api/groups`);
       setGroups(res.data);
     } catch (error) {
       console.error('Fetch groups error:', error);
@@ -81,7 +82,7 @@ function PaymentReminders() {
     }
 
     try {
-      await axios.post('http://localhost:5000/api/payment-reminders', formData);
+      await axios.post(`${config.API_URL}/api/payment-reminders`, formData);
       showToast('Payment reminder created successfully!');
       setFormData({
         groupId: '',
@@ -100,7 +101,7 @@ function PaymentReminders() {
 
   const handleAcknowledge = async (reminderId) => {
     try {
-      await axios.put(`http://localhost:5000/api/payment-reminders/${reminderId}/acknowledge`);
+      await axios.put(`${config.API_URL}/api/payment-reminders/${reminderId}/acknowledge`);
       showToast('Reminder acknowledged');
       fetchReminders();
     } catch (error) {
@@ -110,7 +111,7 @@ function PaymentReminders() {
 
   const handleSnooze = async (reminderId) => {
     try {
-      await axios.put(`http://localhost:5000/api/payment-reminders/${reminderId}/snooze`);
+      await axios.put(`${config.API_URL}/api/payment-reminders/${reminderId}/snooze`);
       showToast('Reminder snoozed for 1 day');
       fetchReminders();
     } catch (error) {
@@ -120,7 +121,7 @@ function PaymentReminders() {
 
   const handleDeactivate = async (reminderId) => {
     try {
-      await axios.put(`http://localhost:5000/api/payment-reminders/${reminderId}/deactivate`);
+      await axios.put(`${config.API_URL}/api/payment-reminders/${reminderId}/deactivate`);
       showToast('Reminder deactivated');
       fetchReminders();
     } catch (error) {
@@ -132,7 +133,7 @@ function PaymentReminders() {
     if (!window.confirm('Delete this reminder?')) return;
 
     try {
-      await axios.delete(`http://localhost:5000/api/payment-reminders/${reminderId}`);
+      await axios.delete(`${config.API_URL}/api/payment-reminders/${reminderId}`);
       showToast('Reminder deleted');
       fetchReminders();
     } catch (error) {

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'; // Add useCallback
 import axios from 'axios';
+import config from '../config';
 
 function BudgetSettings({ type = 'group', groupId = null }) {
   const [budget, setBudget] = useState(null);
@@ -13,8 +14,8 @@ function BudgetSettings({ type = 'group', groupId = null }) {
     try {
       setLoading(true);
       const endpoint = type === 'group' 
-        ? `http://localhost:5000/api/budgets/group/${groupId}`
-        : 'http://localhost:5000/api/budgets/personal';
+        ? `${config.API_URL}/api/budgets/group/${groupId}`
+        : `${config.API_URL}/api/budgets/personal`;
       
       const res = await axios.get(endpoint);
       setBudget(res.data);
@@ -42,8 +43,8 @@ function BudgetSettings({ type = 'group', groupId = null }) {
 
     try {
       const endpoint = type === 'group'
-        ? `http://localhost:5000/api/budgets/group/${groupId}`
-        : 'http://localhost:5000/api/budgets/personal';
+        ? `${config.API_URL}/api/budgets/group/${groupId}`
+        : `${config.API_URL}/api/budgets/personal`;
 
       await axios.put(endpoint, {
         limit: parseFloat(newLimit)
@@ -62,8 +63,8 @@ function BudgetSettings({ type = 'group', groupId = null }) {
   
     try {
       const endpoint = type === 'group'
-        ? `http://localhost:5000/api/budgets/group/${groupId}`
-        : 'http://localhost:5000/api/budgets/personal';
+        ? `${config.API_URL}/api/budgets/group/${groupId}`
+        : `${config.API_URL}/api/budgets/personal`;
   
       await axios.delete(endpoint);
       setError('');
