@@ -807,63 +807,83 @@ function GroupDetail() {
             </div>
 
             {showRecordSettlement && (
-              <div style={styles.addForm}>
-                {error && <div style={styles.errorBox}>{error}</div>}
-                <form onSubmit={handleRecordSettlement}>
-                  <div style={styles.formRow}>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Who Paid? *</label>
-                      <select
-                        name="paidBy"
-                        value={settlementForm.paidBy}
-                        onChange={handleSettlementChange}
-                        required
-                        style={styles.input}
-                      >
-                        <option value="">Select person</option>
-                        {group.members.map(member => (
-                          <option key={member._id} value={member._id}>
-                            {member.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+  <div style={styles.addForm}>
+    {error && <div style={styles.errorBox}>{error}</div>}
+    <form onSubmit={handleRecordSettlement}>
+      {/* WHO PAID and PAID TO - First Row */}
+      <div style={styles.formRow}>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Who Paid? *</label>
+          <select
+            name="paidBy"
+            value={settlementForm.paidBy}
+            onChange={handleSettlementChange}
+            required
+            style={styles.input}
+          >
+            <option value="">Select person</option>
+            {group.members.map(member => (
+              <option key={member._id} value={member._id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Paid To? *</label>
+          <select
+            name="paidTo"
+            value={settlementForm.paidTo}
+            onChange={handleSettlementChange}
+            required
+            style={styles.input}
+          >
+            <option value="">Select person</option>
+            {group.members.map(member => (
+              <option key={member._id} value={member._id}>
+                {member.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-                  <div style={styles.formRow}>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Amount (₹) *</label>
-                      <input
-                        type="number"
-                        name="amount"
-                        placeholder="0.00"
-                        value={settlementForm.amount}
-                        onChange={handleSettlementChange}
-                        required
-                        min="0.01"
-                        step="0.01"
-                        style={styles.input}
-                      />
-                    </div>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Note (Optional)</label>
-                      <input
-                        type="text"
-                        name="note"
-                        placeholder="e.g., Paid via UPI"
-                        value={settlementForm.note}
-                        onChange={handleSettlementChange}
-                        style={styles.input}
-                      />
-                    </div>
-                  </div>
+      {/* AMOUNT and NOTE - Second Row */}
+      <div style={styles.formRow}>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Amount (₹) *</label>
+          <input
+            type="number"
+            name="amount"
+            placeholder="0.00"
+            value={settlementForm.amount}
+            onChange={handleSettlementChange}
+            required
+            min="0.01"
+            step="0.01"
+            style={styles.input}
+          />
+        </div>
+        <div style={styles.formGroup}>
+          <label style={styles.label}>Note (Optional)</label>
+          <input
+            type="text"
+            name="note"
+            placeholder="e.g., Paid via UPI"
+            value={settlementForm.note}
+            onChange={handleSettlementChange}
+            style={styles.input}
+          />
+        </div>
+      </div>
 
-                  <button type="submit" style={styles.submitBtn}>
-                    Record Settlement
-                  </button>
-                </form>
-              </div>
-            )}
+      <button type="submit" style={styles.submitBtn}>
+        Record Settlement
+      </button>
+    </form>
+  </div>
+)}
 
             {balances.simplifiedTransactions.length > 0 && !showRecordSettlement && (
               <div style={styles.quickSettlements}>

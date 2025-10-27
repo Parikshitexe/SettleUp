@@ -84,7 +84,7 @@ function Register() {
           </div>
 
           <div style={styles.inputGroup}>
-            <label style={styles.label}>Phone (Optional)</label>
+            <label style={styles.label}>Phone</label>
             <input
               type="tel"
               name="phone"
